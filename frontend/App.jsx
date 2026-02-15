@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { Shield, Send } from "lucide-react";
 
 const API_URL = "https://lilian-interindividual-merle.ngrok-free.dev";
 
@@ -9,17 +8,14 @@ export default function App() {
   const [connectedKey, setConnectedKey] = useState("");
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
-
-  const [backendOnline, setBackendOnline] = useState(false);
-  const [nodeCount, setNodeCount] = useState(0);
-
-  const [status, setStatus] = useState("IDLE");
-  const [progress, setProgress] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
 
-  // =============================
-  // DEVICE KEY INIT
-  // =============================
+  const [networkOnline, setNetworkOnline] = useState(false);
+  const [nodeCount, setNodeCount] = useState(0);
+  const [status, setStatus] = useState("IDLE");
+  const [progress, setProgress] = useState(0);
+
+  // Generate device key
   useEffect(() => {
     const stored = localStorage.getItem("visrodeck_device_key");
     if (stored) {
@@ -33,51 +29,35 @@ export default function App() {
     }
   }, []);
 
-  // =============================
-  // BACKEND HEALTH CHECK
-  // =============================
+  // Health check
   useEffect(() => {
-    const checkBackend = async () => {
+    const checkHealth = async () => {
       try {
         const res = await fetch(`${API_URL}/api/health`);
         if (!res.ok) throw new Error();
-        setBackendOnline(true);
-      } catch {
-        setBackendOnline(false);
-        setIsConnected(false);
-      }
-    };
-
-    const fetchNodes = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/nodes/count`);
         const data = await res.json();
-        setNodeCount(data.activeNodes || 0);
+        setNetworkOnline(true);
+        setNodeCount(data.connectedNodes || 0);
       } catch {
+        setNetworkOnline(false);
         setNodeCount(0);
       }
     };
 
-    checkBackend();
-    fetchNodes();
-
-    const interval = setInterval(() => {
-      checkBackend();
-      fetchNodes();
-    }, 4000);
-
+    checkHealth();
+    const interval = setInterval(checkHealth, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  // =============================
-  // MESSAGE POLLING
-  // =============================
+  // Poll messages
   useEffect(() => {
-    if (!isConnected || !deviceKey || !connectedKey) return;
+    if (!deviceKey || !connectedKey) return;
 
     const fetchMessages = async () => {
       try {
         const res = await fetch(`${API_URL}/api/messages/${deviceKey}`);
+        if (!res.ok) return;
+
         const data = await res.json();
 
         const filtered = data.filter(
@@ -95,60 +75,57 @@ export default function App() {
     fetchMessages();
     const interval = setInterval(fetchMessages, 2000);
     return () => clearInterval(interval);
-  }, [deviceKey, connectedKey, isConnected]);
+  }, [deviceKey, connectedKey]);
 
-  // =============================
-  // CONNECTION SEQUENCE
-  // =============================
   const runConnectionSequence = async () => {
-    if (recipientKey.length !== 16) return;
-
-    const phases = [
-      "DEPLOYING KEYS",
-      "CONNECTING TO NODE",
-      "ESTABLISHING CHANNEL",
-      "VERIFYING PEER",
-    ];
-
-    for (let i = 0; i < phases.length; i++) {
-      setStatus(phases[i]);
-      setProgress((i + 1) * 25);
-      await new Promise((r) => setTimeout(r, 700));
-    }
-
-    if (!backendOnline) {
+    if (!networkOnline) {
       setStatus("NODES OFFLINE");
-      setProgress(0);
       return;
     }
+
+    if (recipientKey.length !== 16) {
+      setStatus("INVALID KEY FORMAT");
+      return;
+    }
+
+    setStatus("DEPLOYING KEYS");
+    setProgress(25);
+    await new Promise((r) => setTimeout(r, 700));
+
+    setStatus("CONNECTING TO NODE");
+    setProgress(50);
+    await new Promise((r) => setTimeout(r, 700));
 
     try {
       const res = await fetch(`${API_URL}/api/messages/${recipientKey}`);
       if (!res.ok) throw new Error();
+
+      setStatus("AUTHENTICATING");
+      setProgress(75);
+      await new Promise((r) => setTimeout(r, 700));
+
       setConnectedKey(recipientKey);
       setIsConnected(true);
-      setStatus("SECURE CHANNEL ACTIVE");
+      setStatus("SECURE CHANNEL ESTABLISHED");
       setProgress(100);
     } catch {
-      setStatus("KEY CONNECTION FAILED");
+      setStatus("CONNECTION FAILED");
       setProgress(0);
     }
   };
 
-  // =============================
-  // SEND MESSAGE
-  // =============================
   const sendMessage = async () => {
-    if (!message.trim()) return;
+    if (!message.trim() || !connectedKey) return;
 
     const msgObj = {
+      id: Date.now(),
       senderKey: deviceKey,
       recipientKey: connectedKey,
       encryptedData: message,
       timestamp: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, { ...msgObj, id: Date.now() }]);
+    setMessages((prev) => [...prev, msgObj]);
     setMessage("");
 
     try {
@@ -160,43 +137,30 @@ export default function App() {
     } catch {}
   };
 
-  // =============================
-  // UI
-  // =============================
   return (
     <div className="app">
 
-      {/* HEADER */}
       <header className="topbar">
-        <div className="brand">
-          <Shield size={15} />
-          VISRODECK RELAY
+        <div className="brand">VISRODECK RELAY</div>
+
+        <div className="devicePanel">
+          <div>DEVICE KEY: {deviceKey}</div>
+          {isConnected && <div>PEER: {connectedKey}</div>}
         </div>
 
-        <div className="network">
-          STATUS: {backendOnline ? "ONLINE" : "NODES DOWN"} |
+        <div className="networkInfo">
+          STATUS: {networkOnline ? "ONLINE" : "NODES DOWN"} |
           CONNECTED NODES: {nodeCount}
         </div>
-
-        {isConnected && (
-          <div className="connection">
-            DEV: {deviceKey} | PEER: {connectedKey}
-          </div>
-        )}
       </header>
 
-      {/* STATUS PANEL */}
-      <div className="statusPanel">
+      <div className="statusBar">
         <div>{status}</div>
-        <div className="progressBar">
-          <div
-            className="progressFill"
-            style={{ width: `${progress}%` }}
-          />
+        <div className="progress">
+          <div style={{ width: `${progress}%` }} />
         </div>
       </div>
 
-      {/* CONNECT SCREEN */}
       {!isConnected ? (
         <div className="connectBox">
           <input
@@ -215,9 +179,9 @@ export default function App() {
       ) : (
         <>
           <div className="messages">
-            {messages.map((m, i) => (
+            {messages.map((m) => (
               <div
-                key={i}
+                key={m.id}
                 className={
                   m.senderKey === deviceKey
                     ? "msg self"
@@ -236,14 +200,11 @@ export default function App() {
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendMessage()}
             />
-            <button onClick={sendMessage}>
-              <Send size={16} />
-            </button>
+            <button onClick={sendMessage}>SEND</button>
           </div>
         </>
       )}
 
-      {/* FOOTER */}
       <footer className="footer">
         <div>Visrodeck Relay</div>
         <div>Powered by Visrodeck Technology</div>
@@ -258,8 +219,8 @@ export default function App() {
         body {
           margin: 0;
           background: #050505;
-          font-family: "Courier New", monospace;
-          color: #e8ffe8;
+          color: #c8ffd8;
+          font-family: monospace;
         }
 
         .app {
@@ -269,44 +230,44 @@ export default function App() {
         }
 
         .topbar {
-          display: flex;
-          justify-content: space-between;
           padding: 16px 24px;
           border-bottom: 1px solid #111;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
           font-size: 12px;
         }
 
         .brand {
-          display: flex;
-          gap: 8px;
-          align-items: center;
-          color: #00ff66;
+          color: #00ff88;
           font-weight: bold;
+          letter-spacing: 1px;
         }
 
-        .network {
-          opacity: 0.7;
-        }
-
-        .connection {
+        .devicePanel {
+          text-align: center;
           font-size: 11px;
-          opacity: 0.7;
         }
 
-        .statusPanel {
-          padding: 12px 24px;
+        .networkInfo {
+          font-size: 11px;
+          color: #888;
+        }
+
+        .statusBar {
+          padding: 10px 24px;
           border-bottom: 1px solid #111;
         }
 
-        .progressBar {
+        .progress {
           height: 2px;
           background: #111;
           margin-top: 6px;
         }
 
-        .progressFill {
+        .progress div {
           height: 100%;
-          background: #00ff66;
+          background: #00ff88;
           transition: width 0.3s ease;
         }
 
@@ -319,64 +280,70 @@ export default function App() {
           gap: 12px;
         }
 
-        input {
-          padding: 12px;
-          background: #111;
-          border: 1px solid #222;
-          color: #00ff66;
-        }
-
-        button {
-          padding: 12px;
-          background: #00ff66;
-          border: none;
-          cursor: pointer;
-          font-weight: bold;
-        }
-
         .messages {
           flex: 1;
           padding: 20px;
+          overflow-y: auto;
           display: flex;
           flex-direction: column;
           gap: 10px;
-          overflow-y: auto;
         }
 
         .msg {
-          padding: 10px;
+          padding: 10px 14px;
           border-radius: 4px;
-          max-width: 75%;
+          max-width: 70%;
         }
 
         .self {
-          background: #00ff66;
-          color: black;
+          background: #00ff88;
+          color: #000;
           align-self: flex-end;
         }
 
         .other {
           background: #111;
           border: 1px solid #222;
+          align-self: flex-start;
         }
 
         .inputRow {
           display: flex;
-          padding: 14px;
+          padding: 16px;
           border-top: 1px solid #111;
-          gap: 8px;
+          gap: 10px;
+        }
+
+        input {
+          flex: 1;
+          padding: 10px;
+          background: #111;
+          border: 1px solid #222;
+          color: #00ff88;
+        }
+
+        button {
+          padding: 10px 16px;
+          background: #00ff88;
+          border: none;
+          font-weight: bold;
+          cursor: pointer;
+        }
+
+        button:hover {
+          background: #00cc66;
         }
 
         .footer {
-          text-align: center;
-          padding: 20px;
-          font-size: 11px;
           border-top: 1px solid #111;
+          padding: 20px;
+          text-align: center;
+          font-size: 12px;
           background: #070707;
         }
 
         .footer a {
-          color: #00ff66;
+          color: #00ff88;
           text-decoration: none;
         }
 
@@ -384,6 +351,7 @@ export default function App() {
           .topbar {
             flex-direction: column;
             gap: 6px;
+            text-align: center;
           }
         }
 

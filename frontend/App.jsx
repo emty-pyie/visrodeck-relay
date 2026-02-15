@@ -42,7 +42,7 @@ export default function App() {
     for (let i = 0; i < phases.length; i++) {
       setStatusPhase(phases[i]);
       setProgress((i + 1) * 25);
-      await new Promise((r) => setTimeout(r, 900));
+      await new Promise((r) => setTimeout(r, 800));
     }
 
     setConnectedKey(recipientKey);
@@ -53,7 +53,7 @@ export default function App() {
 
   // Send Message
   const sendMessage = async () => {
-    if (!message.trim()) return;
+    if (!message.trim() || !connectedKey) return;
 
     setStatusPhase("TRANSMITTING MESSAGE");
     setProgress(90);
@@ -72,6 +72,16 @@ export default function App() {
         }),
       });
 
+      // ✅ Immediate local display
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          text: message,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+
       setMessage("");
       setProgress(100);
 
@@ -84,9 +94,9 @@ export default function App() {
     }
   };
 
-  // Fetch Messages from Backend
+  // Fetch Messages
   const fetchMessages = async () => {
-    if (!isConnected) return;
+    if (!deviceKey) return;
 
     try {
       const res = await fetch(`${API_URL}/api/messages/${deviceKey}`);
@@ -104,14 +114,14 @@ export default function App() {
     }
   };
 
-  // Poll every 3 seconds
+  // 🔥 Always poll (not tied to connection)
   useEffect(() => {
-    if (!isConnected) return;
+    if (!deviceKey) return;
 
     fetchMessages();
     const interval = setInterval(fetchMessages, 3000);
     return () => clearInterval(interval);
-  }, [isConnected, deviceKey]);
+  }, [deviceKey]);
 
   return (
     <div className="app">

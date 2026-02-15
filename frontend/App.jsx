@@ -429,6 +429,37 @@ export default function App() {
             gap: 10px;
           }
         }
+        .connectionInfo {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.key {
+  color: #7aff7a;
+  font-weight: 600;
+}
+
+.key.active {
+  color: #4caf50;
+}
+
+.disconnectBtn {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid #333;
+  color: #ff5a5a;
+  cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+.disconnectBtn:hover {
+  border-color: #ff5a5a;
+}
+
 
       `}</style>
     </div>

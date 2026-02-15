@@ -19,6 +19,7 @@ export default function App() {
       Array.from({ length: 16 }, () => Math.floor(Math.random() * 10)).join("");
 
     const stored = localStorage.getItem("visrodeck_device_key");
+
     if (!stored) {
       const newKey = generateKey();
       localStorage.setItem("visrodeck_device_key", newKey);
@@ -58,8 +59,6 @@ export default function App() {
     setStatusPhase("TRANSMITTING MESSAGE");
     setProgress(90);
 
-    const encrypted = btoa(message);
-
     try {
       await fetch(`${API_URL}/api/message`, {
         method: "POST",
@@ -67,12 +66,12 @@ export default function App() {
         body: JSON.stringify({
           senderKey: deviceKey,
           recipientKey: connectedKey,
-          encryptedData: encrypted,
+          encryptedData: message, // ← send plain text
           timestamp: new Date().toISOString(),
         }),
       });
 
-      // ✅ Immediate local display
+      // Show immediately
       setMessages((prev) => [
         ...prev,
         {
@@ -104,7 +103,7 @@ export default function App() {
 
       const parsed = data.map((m) => ({
         id: m.id,
-        text: atob(m.encryptedData),
+        text: m.encryptedData, // ← already decrypted by backend
         timestamp: m.timestamp,
       }));
 
@@ -114,7 +113,7 @@ export default function App() {
     }
   };
 
-  // 🔥 Always poll (not tied to connection)
+  // Always Poll
   useEffect(() => {
     if (!deviceKey) return;
 
@@ -206,7 +205,7 @@ export default function App() {
           margin: 0;
           background: #000;
           color: #fff;
-          font-family: system-ui, -apple-system, sans-serif;
+          font-family: system-ui, sans-serif;
         }
 
         .app {
@@ -338,9 +337,6 @@ export default function App() {
         }
 
         @media (max-width: 768px) {
-          .dashboard {
-            gap: 20px;
-          }
           .topbar {
             flex-direction: column;
             gap: 8px;

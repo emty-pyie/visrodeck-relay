@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Shield, Key, Send, Lock, Unlock, AlertCircle, CheckCircle, XCircle, Globe, FileText } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Shield, Key, Send, Lock, Unlock, AlertCircle, CheckCircle, XCircle, Globe, FileText, Zap } from 'lucide-react';
 
 // ✅ API Configuration - Change this to your ngrok or production URL
 const API_URL = 'https://lilian-interindividual-merle.ngrok-free.dev';
@@ -15,8 +15,9 @@ export default function App() {
   const [encryptionProgress, setEncryptionProgress] = useState(0);
   const [error, setError] = useState('');
   const [backendOnline, setBackendOnline] = useState(false);
+  const connectionCanvasRef = useRef(null);
+  const animationFrameRef = useRef(null);
 
-  // Generate unique 16-digit device key on mount
   useEffect(() => {
     const generateKey = () => {
       let key = '';
@@ -38,8 +39,166 @@ export default function App() {
     checkBackendStatus();
     const statusInterval = setInterval(checkBackendStatus, 10000);
     
-    return () => clearInterval(statusInterval);
+    return () => {
+      clearInterval(statusInterval);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
   }, []);
+
+  // Connection Animation
+  useEffect(() => {
+    if (isConnecting && connectionCanvasRef.current) {
+      startConnectionAnimation();
+    } else {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    }
+    
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [isConnecting, nodeStatus]);
+
+  const startConnectionAnimation = () => {
+    const canvas = connectionCanvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    canvas.width = canvas.offsetWidth;
+    canvas.height = 300;
+
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    
+    // Node positions
+    const nodes = [
+      { x: centerX - 150, y: centerY, label: 'You', color: '#ffffff' },
+      { x: centerX + 150, y: centerY, label: 'Recipient', color: '#ffffff' },
+      { x: centerX, y: centerY - 80, label: 'Node 1', color: '#10b981' },
+      { x: centerX, y: centerY + 80, label: 'Node 2', color: '#10b981' },
+    ];
+
+    let animationProgress = 0;
+    let particleProgress = 0;
+
+    const animate = () => {
+      ctx.fillStyle = '#111827';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      animationProgress += 0.01;
+      particleProgress += 0.03;
+
+      // Draw connections based on stage
+      if (nodeStatus === 'searching') {
+        // Pulsing search waves
+        for (let i = 0; i < 3; i++) {
+          const radius = (animationProgress * 200 + i * 60) % 200;
+          ctx.beginPath();
+          ctx.arc(nodes[0].x, nodes[0].y, radius, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(255, 255, 255, ${1 - radius / 200})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+
+      if (nodeStatus === 'handshaking' || nodeStatus === 'encrypting' || nodeStatus === 'connected') {
+        // Draw lines between nodes
+        nodes.forEach((node, i) => {
+          nodes.forEach((otherNode, j) => {
+            if (i < j) {
+              ctx.beginPath();
+              ctx.moveTo(node.x, node.y);
+              ctx.lineTo(otherNode.x, otherNode.y);
+              ctx.strokeStyle = 'rgba(16, 185, 129, 0.3)';
+              ctx.lineWidth = 1;
+              ctx.stroke();
+            }
+          });
+        });
+      }
+
+      if (nodeStatus === 'handshaking') {
+        // Key exchange particles
+        const particle1X = nodes[0].x + (nodes[2].x - nodes[0].x) * (particleProgress % 1);
+        const particle1Y = nodes[0].y + (nodes[2].y - nodes[0].y) * (particleProgress % 1);
+        
+        ctx.beginPath();
+        ctx.arc(particle1X, particle1Y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '12px monospace';
+        ctx.fillText('🔑', particle1X - 6, particle1Y + 4);
+      }
+
+      if (nodeStatus === 'encrypting') {
+        // Encryption symbols flowing
+        for (let i = 0; i < 4; i++) {
+          const progress = (particleProgress + i * 0.25) % 1;
+          const x = nodes[0].x + (nodes[1].x - nodes[0].x) * progress;
+          const y = nodes[0].y + (nodes[1].y - nodes[0].y) * progress;
+          
+          ctx.fillStyle = '#10b981';
+          ctx.font = '16px monospace';
+          ctx.fillText('🔒', x - 8, y + 5);
+        }
+      }
+
+      if (nodeStatus === 'connected') {
+        // Success glow
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#10b981';
+        nodes.forEach(node => {
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, 25, 0, Math.PI * 2);
+          ctx.strokeStyle = '#10b981';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        });
+        ctx.shadowBlur = 0;
+      }
+
+      // Draw nodes
+      nodes.forEach(node => {
+        // Node circle
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, 20, 0, Math.PI * 2);
+        ctx.fillStyle = node.color === '#ffffff' ? '#1f2937' : 'rgba(16, 185, 129, 0.2)';
+        ctx.fill();
+        ctx.strokeStyle = node.color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Node label
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(node.label, node.x, node.y - 35);
+      });
+
+      // Status text
+      ctx.fillStyle = '#10b981';
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'center';
+      const statusTexts = {
+        searching: 'SEARCHING FOR NODES...',
+        handshaking: 'EXCHANGING KEYS...',
+        encrypting: 'DEPLOYING ENCRYPTION...',
+        connected: 'CONNECTION SECURED ✓'
+      };
+      ctx.fillText(statusTexts[nodeStatus] || '', centerX, 30);
+
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    animate();
+  };
 
   const checkBackendStatus = async () => {
     try {
@@ -86,17 +245,23 @@ export default function App() {
 
     setIsConnecting(true);
     setNodeStatus('searching');
+    setEncryptionProgress(0);
 
-    const stages = ['searching', 'handshaking', 'encrypting', 'connected'];
-    for (let i = 0; i < stages.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 600));
-      setNodeStatus(stages[i]);
-      setEncryptionProgress((i + 1) * 25);
+    const stages = [
+      { status: 'searching', duration: 1200, progress: 25 },
+      { status: 'handshaking', duration: 1200, progress: 50 },
+      { status: 'encrypting', duration: 1200, progress: 75 },
+      { status: 'connected', duration: 800, progress: 100 }
+    ];
+
+    for (let stage of stages) {
+      setNodeStatus(stage.status);
+      await new Promise(resolve => setTimeout(resolve, stage.duration));
+      setEncryptionProgress(stage.progress);
     }
 
     setIsConnecting(false);
     setIsConnected(true);
-    setEncryptionProgress(100);
   };
 
   const sendMessage = async () => {
@@ -178,7 +343,6 @@ export default function App() {
 
   return (
     <div style={styles.pageContainer}>
-      {/* Header */}
       <header style={styles.header}>
         <div style={styles.headerContent}>
           <div style={styles.headerLeft}>
@@ -202,10 +366,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main style={styles.main}>
         <div style={styles.container}>
-          {/* Info Bar */}
           <div style={styles.infoBar}>
             <div style={styles.infoItem}>
               <Lock size={16} />
@@ -221,7 +383,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Device Key Card */}
           <div style={styles.deviceKeyCard}>
             <div style={styles.cardHeader}>
               <Key size={20} />
@@ -244,7 +405,6 @@ export default function App() {
             </p>
           </div>
 
-          {/* Error Display */}
           {error && (
             <div style={styles.errorCard}>
               <AlertCircle size={20} />
@@ -258,7 +418,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Connection / Chat Interface */}
           {!isConnected ? (
             <div style={styles.card}>
               <div style={styles.cardHeader}>
@@ -293,13 +452,22 @@ export default function App() {
 
               {isConnecting && (
                 <div style={styles.connectionProgress}>
+                  {/* Animated Connection Canvas */}
+                  <canvas 
+                    ref={connectionCanvasRef}
+                    style={styles.connectionCanvas}
+                  />
+                  
                   <div style={styles.progressInfo}>
-                    <span style={styles.progressText}>
-                      {nodeStatus === 'searching' && 'Searching for nodes...'}
-                      {nodeStatus === 'handshaking' && 'Performing key exchange...'}
-                      {nodeStatus === 'encrypting' && 'Establishing encryption...'}
-                      {nodeStatus === 'connected' && 'Connection secured!'}
-                    </span>
+                    <div style={styles.progressDetails}>
+                      <Zap size={18} style={styles.zapIcon} />
+                      <span style={styles.progressText}>
+                        {nodeStatus === 'searching' && 'Scanning network nodes...'}
+                        {nodeStatus === 'handshaking' && 'Exchanging cryptographic keys...'}
+                        {nodeStatus === 'encrypting' && 'Deploying AES-256 encryption...'}
+                        {nodeStatus === 'connected' && 'Secure tunnel established!'}
+                      </span>
+                    </div>
                     <span style={styles.progressPercent}>{encryptionProgress}%</span>
                   </div>
                   <div style={styles.progressBar}>
@@ -320,7 +488,7 @@ export default function App() {
                   cursor: (recipientKey.length === 16 && backendOnline) ? 'pointer' : 'not-allowed',
                 }}
               >
-                {isConnecting ? 'Connecting...' : 'Connect Securely'}
+                {isConnecting ? 'Establishing Connection...' : 'Connect Securely'}
               </button>
             </div>
           ) : (
@@ -405,7 +573,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* Footer */}
       <footer style={styles.footer}>
         <div style={styles.footerContent}>
           <div style={styles.footerLeft}>
@@ -440,8 +607,6 @@ const styles = {
     color: '#ffffff',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   },
-  
-  // Header
   header: {
     background: '#111827',
     color: '#ffffff',
@@ -498,8 +663,6 @@ const styles = {
     fontSize: '0.875rem',
     fontWeight: 500,
   },
-  
-  // Main Content
   main: {
     flex: 1,
     padding: '2rem 0',
@@ -510,8 +673,6 @@ const styles = {
     margin: '0 auto',
     padding: '0 2rem',
   },
-  
-  // Info Bar
   infoBar: {
     display: 'flex',
     gap: '2rem',
@@ -529,8 +690,6 @@ const styles = {
     fontSize: '0.875rem',
     color: '#d1d5db',
   },
-  
-  // Device Key Card
   deviceKeyCard: {
     background: '#1f2937',
     border: '1px solid #374151',
@@ -584,8 +743,6 @@ const styles = {
     color: '#9ca3af',
     margin: 0,
   },
-  
-  // Error Card
   errorCard: {
     background: '#7f1d1d',
     border: '1px solid #991b1b',
@@ -606,16 +763,12 @@ const styles = {
     color: '#fecaca',
     padding: '0 0.5rem',
   },
-  
-  // Card
   card: {
     background: '#1f2937',
     border: '1px solid #374151',
     borderRadius: '8px',
     padding: '1.5rem',
   },
-  
-  // Form
   formGroup: {
     marginBottom: '1.5rem',
   },
@@ -643,26 +796,40 @@ const styles = {
     marginTop: '0.5rem',
     fontSize: '0.875rem',
   },
-  
-  // Connection Progress
   connectionProgress: {
     marginBottom: '1.5rem',
-    padding: '1rem',
+  },
+  connectionCanvas: {
+    width: '100%',
+    height: '300px',
+    borderRadius: '8px',
+    marginBottom: '1rem',
     background: '#111827',
-    borderRadius: '6px',
+    border: '1px solid #374151',
   },
   progressInfo: {
     display: 'flex',
     justifyContent: 'space-between',
-    marginBottom: '0.5rem',
+    alignItems: 'center',
+    marginBottom: '0.75rem',
     fontSize: '0.875rem',
     fontWeight: 500,
+  },
+  progressDetails: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+  },
+  zapIcon: {
+    color: '#10b981',
   },
   progressText: {
     color: '#d1d5db',
   },
   progressPercent: {
-    color: '#9ca3af',
+    color: '#10b981',
+    fontWeight: 700,
+    fontSize: '1rem',
   },
   progressBar: {
     width: '100%',
@@ -673,11 +840,10 @@ const styles = {
   },
   progressFill: {
     height: '100%',
-    background: '#ffffff',
+    background: 'linear-gradient(90deg, #10b981, #34d399)',
     transition: 'width 0.3s ease',
+    boxShadow: '0 0 10px rgba(16, 185, 129, 0.5)',
   },
-  
-  // Buttons
   primaryButton: {
     width: '100%',
     padding: '0.875rem',
@@ -700,8 +866,6 @@ const styles = {
     fontWeight: 600,
     cursor: 'pointer',
   },
-  
-  // Connection Badge
   connectionBadge: {
     display: 'flex',
     alignItems: 'center',
@@ -714,8 +878,6 @@ const styles = {
     fontSize: '0.875rem',
     color: '#86efac',
   },
-  
-  // Messages
   messagesContainer: {
     height: '400px',
     overflowY: 'auto',
@@ -752,8 +914,6 @@ const styles = {
     fontSize: '0.95rem',
     lineHeight: 1.5,
   },
-  
-  // Message Input
   messageInputContainer: {
     display: 'flex',
     gap: '0.75rem',
@@ -780,8 +940,6 @@ const styles = {
     gap: '0.5rem',
     transition: 'all 0.2s',
   },
-  
-  // Footer
   footer: {
     background: '#111827',
     color: '#ffffff',

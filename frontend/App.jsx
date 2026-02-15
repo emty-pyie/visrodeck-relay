@@ -55,7 +55,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [deviceKey, connectedKey]);
 
-  // Cinematic connection sequence
   const runConnectionSequence = async () => {
     if (recipientKey.length !== 16) return;
 
@@ -63,13 +62,13 @@ export default function App() {
       "DEPLOYING KEYS",
       "CONNECTING TO NODE",
       "ESTABLISHING SECURE CHANNEL",
-      "AUTHENTICATION VERIFIED",
+      "AUTH VERIFIED",
     ];
 
     for (let i = 0; i < phases.length; i++) {
       setStatus(phases[i]);
       setProgress((i + 1) * 25);
-      await new Promise((r) => setTimeout(r, 900));
+      await new Promise((r) => setTimeout(r, 800));
     }
 
     setConnectedKey(recipientKey);
@@ -89,7 +88,6 @@ export default function App() {
       timestamp: new Date().toISOString(),
     };
 
-    // show instantly
     setMessages((prev) => [...prev, msgObj]);
     setMessage("");
 
@@ -107,19 +105,17 @@ export default function App() {
   return (
     <div className="app">
 
-      {/* TOP BAR */}
-      <div className="topbar">
+      <header className="topbar">
         <div className="brand">
-          <Shield size={18} />
+          <Shield size={16} />
           VISRODECK RELAY
         </div>
         <div className="keys">
-          DEVICE: {deviceKey}
+          DEV: {deviceKey}
           {isConnected && <> | PEER: {connectedKey}</>}
         </div>
-      </div>
+      </header>
 
-      {/* STATUS PANEL */}
       <div className="statusPanel">
         <div className="statusText">{status}</div>
         <div className="progressBar">
@@ -177,11 +173,12 @@ export default function App() {
       )}
 
       <style>{`
+
         body {
           margin: 0;
-          background: #000;
-          color: #fff;
-          font-family: system-ui;
+          background: #050505;
+          color: #e6ffe6;
+          font-family: "Courier New", monospace;
         }
 
         .app {
@@ -191,97 +188,131 @@ export default function App() {
         }
 
         .topbar {
-          padding: 20px 30px;
+          padding: 16px 24px;
           border-bottom: 1px solid #111;
           display: flex;
           justify-content: space-between;
+          align-items: center;
+          font-size: 13px;
+          letter-spacing: 1px;
         }
 
         .brand {
           display: flex;
-          gap: 10px;
+          align-items: center;
+          gap: 8px;
           font-weight: 600;
+          color: #00ff00;
         }
 
         .keys {
-          font-size: 12px;
           opacity: 0.6;
+          font-size: 11px;
         }
 
         .statusPanel {
-          padding: 20px 30px;
+          padding: 14px 24px;
           border-bottom: 1px solid #111;
         }
 
         .statusText {
+          font-size: 12px;
           letter-spacing: 2px;
-          margin-bottom: 8px;
-          font-size: 13px;
+          margin-bottom: 6px;
+          color: #00ff00;
         }
 
         .progressBar {
-          height: 3px;
+          height: 2px;
           background: #111;
         }
 
         .progressFill {
           height: 100%;
           background: #00ff00;
-          transition: width 0.4s ease;
+          transition: width 0.3s ease;
         }
 
         .connectBox {
           margin: auto;
-          width: 400px;
+          width: 90%;
+          max-width: 420px;
           display: flex;
           flex-direction: column;
-          gap: 15px;
+          gap: 12px;
         }
 
         .messages {
           flex: 1;
-          padding: 40px;
+          padding: 20px;
           overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
         }
 
         .msg {
-          padding: 14px;
-          margin-bottom: 12px;
-          border-radius: 6px;
-          max-width: 600px;
+          padding: 12px 14px;
+          border-radius: 4px;
+          font-size: 14px;
+          max-width: 75%;
+          word-break: break-word;
         }
 
         .self {
           background: #00ff00;
           color: #000;
-          margin-left: auto;
+          align-self: flex-end;
         }
 
         .other {
           background: #111;
+          border: 1px solid #222;
+          align-self: flex-start;
         }
 
         .inputRow {
-          padding: 20px 30px;
-          border-top: 1px solid #111;
           display: flex;
+          padding: 16px;
+          border-top: 1px solid #111;
           gap: 10px;
         }
 
         input {
           flex: 1;
-          padding: 14px;
+          padding: 12px;
           background: #111;
           border: 1px solid #222;
-          color: #fff;
+          color: #00ff00;
+          font-family: inherit;
+          font-size: 14px;
         }
 
         button {
-          padding: 14px 20px;
+          padding: 12px 18px;
           background: #00ff00;
           border: none;
           cursor: pointer;
+          font-weight: bold;
         }
+
+        button:hover {
+          background: #00cc00;
+        }
+
+        /* Mobile */
+        @media (max-width: 600px) {
+          .topbar {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 6px;
+          }
+
+          .msg {
+            max-width: 85%;
+          }
+        }
+
       `}</style>
     </div>
   );

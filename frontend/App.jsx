@@ -202,20 +202,30 @@ export default function App() {
 
   const checkBackendStatus = async () => {
     try {
+      console.log('Checking backend at:', `${API_URL}/api/health`); // Debug log
+      
       const response = await fetch(`${API_URL}/api/health`, {
         method: 'GET',
-        headers: { 'Accept': 'application/json' },
+        headers: { 
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
       });
+      
+      console.log('Backend response status:', response.status); // Debug log
       
       if (response.ok) {
         const data = await response.json();
+        console.log('Backend health check:', data); // Debug log
         setBackendOnline(data.status === 'online');
         setNodeStatus('online');
       } else {
+        console.error('Backend returned error status:', response.status);
         setBackendOnline(false);
         setNodeStatus('offline');
       }
     } catch (error) {
+      console.error('Backend health check failed:', error);
       setBackendOnline(false);
       setNodeStatus('offline');
     }

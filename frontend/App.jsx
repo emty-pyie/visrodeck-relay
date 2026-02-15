@@ -13,10 +13,14 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
 
+  // ==============================
   // Generate / Load Device Key
+  // ==============================
   useEffect(() => {
     const generateKey = () =>
-      Array.from({ length: 16 }, () => Math.floor(Math.random() * 10)).join("");
+      Array.from({ length: 16 }, () =>
+        Math.floor(Math.random() * 10)
+      ).join("");
 
     const stored = localStorage.getItem("visrodeck_device_key");
 
@@ -29,7 +33,9 @@ export default function App() {
     }
   }, []);
 
+  // ==============================
   // Connection Animation
+  // ==============================
   const runConnectionSequence = async () => {
     if (recipientKey.length !== 16) return;
 
@@ -52,7 +58,9 @@ export default function App() {
     setProgress(100);
   };
 
+  // ==============================
   // Send Message
+  // ==============================
   const sendMessage = async () => {
     if (!message.trim() || !connectedKey) return;
 
@@ -62,16 +70,18 @@ export default function App() {
     try {
       await fetch(`${API_URL}/api/message`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true", // 🔥 CRITICAL FIX
+        },
         body: JSON.stringify({
           senderKey: deviceKey,
           recipientKey: connectedKey,
-          encryptedData: message, // ← send plain text
+          encryptedData: message,
           timestamp: new Date().toISOString(),
         }),
       });
 
-      // Show immediately
       setMessages((prev) => [
         ...prev,
         {
@@ -87,23 +97,33 @@ export default function App() {
       setTimeout(() => {
         setStatusPhase("READY");
       }, 600);
-
     } catch (err) {
+      console.error(err);
       setStatusPhase("TRANSMISSION FAILED");
     }
   };
 
+  // ==============================
   // Fetch Messages
+  // ==============================
   const fetchMessages = async () => {
     if (!deviceKey) return;
 
     try {
-      const res = await fetch(`${API_URL}/api/messages/${deviceKey}`);
+      const res = await fetch(
+        `${API_URL}/api/messages/${deviceKey}`,
+        {
+          headers: {
+            "ngrok-skip-browser-warning": "true", // 🔥 CRITICAL FIX
+          },
+        }
+      );
+
       const data = await res.json();
 
       const parsed = data.map((m) => ({
         id: m.id,
-        text: m.encryptedData, // ← already decrypted by backend
+        text: m.encryptedData,
         timestamp: m.timestamp,
       }));
 
@@ -113,7 +133,9 @@ export default function App() {
     }
   };
 
-  // Always Poll
+  // ==============================
+  // Poll Messages Every 3s
+  // ==============================
   useEffect(() => {
     if (!deviceKey) return;
 
@@ -126,7 +148,6 @@ export default function App() {
     <div className="app">
       <div className="dashboard">
 
-        {/* TOP BAR */}
         <div className="topbar">
           <div className="left">
             <Shield size={18} />
@@ -140,7 +161,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* STATUS MODULE */}
         <div className="status">
           <div className="phase">{statusPhase}</div>
           <div className="progressbar">
@@ -190,7 +210,9 @@ export default function App() {
                 placeholder="TYPE SECURE MESSAGE..."
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && sendMessage()
+                }
               />
               <button onClick={sendMessage}>
                 <Send size={16} />
@@ -199,156 +221,6 @@ export default function App() {
           </div>
         )}
       </div>
-
-      <style>{`
-        body {
-          margin: 0;
-          background: #000;
-          color: #fff;
-          font-family: system-ui, sans-serif;
-        }
-
-        .app {
-          min-height: 100vh;
-          display: flex;
-          justify-content: center;
-          padding: 40px 20px;
-        }
-
-        .dashboard {
-          width: 100%;
-          max-width: 1000px;
-          display: flex;
-          flex-direction: column;
-          gap: 30px;
-        }
-
-        .topbar {
-          display: flex;
-          justify-content: space-between;
-          font-size: 13px;
-          letter-spacing: 1px;
-          border-bottom: 1px solid #222;
-          padding-bottom: 12px;
-        }
-
-        .topbar .left {
-          display: flex;
-          gap: 8px;
-          align-items: center;
-          font-weight: 600;
-        }
-
-        .topbar .right {
-          display: flex;
-          gap: 20px;
-          opacity: 0.7;
-        }
-
-        .status {
-          border: 1px solid #222;
-          padding: 20px;
-          border-radius: 8px;
-        }
-
-        .phase {
-          font-size: 14px;
-          margin-bottom: 10px;
-          letter-spacing: 2px;
-        }
-
-        .progressbar {
-          height: 4px;
-          background: #111;
-          border-radius: 4px;
-          overflow: hidden;
-        }
-
-        .progress {
-          height: 100%;
-          background: #fff;
-          transition: width 0.4s ease;
-        }
-
-        .connect-panel input,
-        .console input {
-          width: 100%;
-          padding: 14px;
-          background: #111;
-          border: 1px solid #333;
-          border-radius: 6px;
-          color: #fff;
-        }
-
-        button {
-          padding: 14px;
-          margin-top: 12px;
-          width: 100%;
-          background: #fff;
-          color: #000;
-          border: none;
-          font-weight: 600;
-          cursor: pointer;
-        }
-
-        button:disabled {
-          background: #333;
-          color: #777;
-          cursor: not-allowed;
-        }
-
-        .console {
-          display: flex;
-          flex-direction: column;
-          gap: 20px;
-        }
-
-        .messages {
-          min-height: 300px;
-          border: 1px solid #222;
-          padding: 20px;
-          border-radius: 8px;
-          overflow-y: auto;
-        }
-
-        .msg {
-          margin-bottom: 10px;
-          padding: 10px;
-          background: #111;
-          border-radius: 4px;
-        }
-
-        .empty {
-          opacity: 0.4;
-        }
-
-        .input-row {
-          display: flex;
-          gap: 10px;
-        }
-
-        .input-row input {
-          flex: 1;
-        }
-
-        .input-row button {
-          width: 80px;
-          margin-top: 0;
-        }
-
-        @media (max-width: 768px) {
-          .topbar {
-            flex-direction: column;
-            gap: 8px;
-          }
-          .input-row {
-            flex-direction: column;
-          }
-          .input-row button {
-            width: 100%;
-          }
-        }
-      `}</style>
     </div>
   );
 }

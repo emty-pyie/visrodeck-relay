@@ -7,13 +7,17 @@ export default function App() {
   const [deviceKey, setDeviceKey] = useState("");
   const [recipientKey, setRecipientKey] = useState("");
   const [connectedKey, setConnectedKey] = useState("");
-  const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
-  const [isConnected, setIsConnected] = useState(false);
-  const [status, setStatus] = useState("IDLE");
-  const [progress, setProgress] = useState(0);
+  const [message, setMessage] = useState("");
 
-  // Generate device key
+  const [backendOnline, setBackendOnline] = useState(false);
+  const [connectedNodes, setConnectedNodes] = useState(0);
+  const [status, setStatus] = useState("IDLE");
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState("");
+
+  /* ---------------- DEVICE KEY ---------------- */
+
   useEffect(() => {
     const stored = localStorage.getItem("visrodeck_device_key");
     if (stored) {
@@ -27,9 +31,29 @@ export default function App() {
     }
   }, []);
 
-  // Poll messages
+  /* ---------------- HEALTH CHECK ---------------- */
+
   useEffect(() => {
-    if (!deviceKey || !connectedKey) return;
+    const checkHealth = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/health`);
+        if (!res.ok) throw new Error();
+        setBackendOnline(true);
+      } catch {
+        setBackendOnline(false);
+        setIsConnected(false);
+      }
+    };
+
+    checkHealth();
+    const interval = setInterval(checkHealth, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  /* ---------------- FETCH MESSAGES ---------------- */
+
+  useEffect(() => {
+    if (!deviceKey || !connectedKey || !backendOnline) return;
 
     const fetchMessages = async () => {
       try {
@@ -45,88 +69,105 @@ export default function App() {
         );
 
         setMessages(filtered);
+
+        // Unique nodes count
+        const uniqueNodes = new Set(
+          data.flatMap((m) => [m.senderKey, m.recipientKey])
+        );
+        setConnectedNodes(uniqueNodes.size);
+
       } catch (err) {
-        console.error("Fetch failed", err);
+        setBackendOnline(false);
       }
     };
 
     fetchMessages();
-    const interval = setInterval(fetchMessages, 2000);
+    const interval = setInterval(fetchMessages, 2500);
     return () => clearInterval(interval);
-  }, [deviceKey, connectedKey]);
+  }, [deviceKey, connectedKey, backendOnline]);
 
-  const runConnectionSequence = async () => {
+  /* ---------------- CONNECT TO PEER ---------------- */
+
+  const connectToPeer = async () => {
     if (recipientKey.length !== 16) return;
 
-    const phases = [
-      "DEPLOYING KEYS",
-      "CONNECTING TO NODE",
-      "ESTABLISHING SECURE CHANNEL",
-      "AUTH VERIFIED",
-    ];
+    setStatus("VERIFYING NODE");
+    setConnectionError("");
 
-    for (let i = 0; i < phases.length; i++) {
-      setStatus(phases[i]);
-      setProgress((i + 1) * 25);
-      await new Promise((r) => setTimeout(r, 800));
+    try {
+      const res = await fetch(`${API_URL}/api/exists/${recipientKey}`);
+      const data = await res.json();
+
+      if (!data.exists) {
+        setStatus("CONNECTION FAILED");
+        setConnectionError("Key does not exist");
+        return;
+      }
+
+      setConnectedKey(recipientKey);
+      setIsConnected(true);
+      setStatus("SECURE CHANNEL ESTABLISHED");
+
+    } catch {
+      setStatus("CONNECTION FAILED");
+      setConnectionError("Network error");
     }
-
-    setConnectedKey(recipientKey);
-    setIsConnected(true);
-    setStatus("READY");
-    setProgress(100);
   };
+
+  /* ---------------- SEND ---------------- */
 
   const sendMessage = async () => {
     if (!message.trim()) return;
 
-    const msgObj = {
-      id: Date.now(),
+    const msg = {
       senderKey: deviceKey,
       recipientKey: connectedKey,
       encryptedData: message,
       timestamp: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, msgObj]);
+    setMessages((prev) => [...prev, msg]);
     setMessage("");
 
     try {
       await fetch(`${API_URL}/api/message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(msgObj),
+        body: JSON.stringify(msg),
       });
-    } catch (err) {
-      console.error("Send failed", err);
-    }
+    } catch {}
   };
 
   return (
     <div className="app">
+
+      {/* ---------------- HEADER ---------------- */}
 
       <header className="topbar">
         <div className="brand">
           <Shield size={16} />
           VISRODECK RELAY
         </div>
-        <div className="keys">
-          DEV: {deviceKey}
-          {isConnected && <> | PEER: {connectedKey}</>}
+
+        <div className="network">
+          STATUS: {backendOnline ? "ONLINE" : "NODES DOWN"} |
+          CONNECTED NODES: {backendOnline ? connectedNodes : 0}
         </div>
       </header>
 
-      <div className="statusPanel">
-        <div className="statusText">{status}</div>
-        <div className="progressBar">
-          <div
-            className="progressFill"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
+      {/* ---------------- STATUS ---------------- */}
 
-      {!isConnected ? (
+      <div className="statusBar">{status}</div>
+
+      {!backendOnline && (
+        <div className="offlinePanel">
+          NODES OFFLINE — CHECK BACKEND
+        </div>
+      )}
+
+      {/* ---------------- CONNECT ---------------- */}
+
+      {!isConnected && backendOnline && (
         <div className="connectBox">
           <input
             placeholder="ENTER 16-DIGIT PEER KEY"
@@ -137,16 +178,24 @@ export default function App() {
               )
             }
           />
-          <button onClick={runConnectionSequence}>
+          <button onClick={connectToPeer}>
             INITIATE CONNECTION
           </button>
+
+          {connectionError && (
+            <div className="error">{connectionError}</div>
+          )}
         </div>
-      ) : (
+      )}
+
+      {/* ---------------- CHAT ---------------- */}
+
+      {isConnected && backendOnline && (
         <>
           <div className="messages">
-            {messages.map((m) => (
+            {messages.map((m, i) => (
               <div
-                key={m.id}
+                key={i}
                 className={
                   m.senderKey === deviceKey
                     ? "msg self"
@@ -172,65 +221,65 @@ export default function App() {
         </>
       )}
 
+      {/* ---------------- FOOTER ---------------- */}
+
+      <footer className="footer">
+        <div>Visrodeck Relay</div>
+        <div>Powered by Visrodeck Technology</div>
+        <div>All rights reserved</div>
+        <a href="https://visrodeck.com" target="_blank">
+          Visit Visrodeck.com
+        </a>
+      </footer>
+
+      {/* ---------------- CSS ---------------- */}
+
       <style>{`
 
         body {
           margin: 0;
           background: #050505;
-          color: #e6ffe6;
+          color: #d4ffd4;
           font-family: "Courier New", monospace;
         }
 
         .app {
-          height: 100vh;
           display: flex;
           flex-direction: column;
+          min-height: 100vh;
         }
 
         .topbar {
           padding: 16px 24px;
-          border-bottom: 1px solid #111;
           display: flex;
           justify-content: space-between;
-          align-items: center;
+          border-bottom: 1px solid #111;
           font-size: 13px;
-          letter-spacing: 1px;
         }
 
         .brand {
+          color: #00ff88;
           display: flex;
           align-items: center;
           gap: 8px;
-          font-weight: 600;
-          color: #00ff00;
         }
 
-        .keys {
-          opacity: 0.6;
-          font-size: 11px;
+        .network {
+          font-size: 12px;
+          opacity: 0.7;
         }
 
-        .statusPanel {
-          padding: 14px 24px;
+        .statusBar {
+          padding: 10px 24px;
           border-bottom: 1px solid #111;
-        }
-
-        .statusText {
           font-size: 12px;
           letter-spacing: 2px;
-          margin-bottom: 6px;
-          color: #00ff00;
         }
 
-        .progressBar {
-          height: 2px;
-          background: #111;
-        }
-
-        .progressFill {
-          height: 100%;
-          background: #00ff00;
-          transition: width 0.3s ease;
+        .offlinePanel {
+          padding: 20px;
+          text-align: center;
+          color: #ff5555;
         }
 
         .connectBox {
@@ -240,6 +289,26 @@ export default function App() {
           display: flex;
           flex-direction: column;
           gap: 12px;
+        }
+
+        input {
+          padding: 12px;
+          background: #111;
+          border: 1px solid #222;
+          color: #00ff88;
+        }
+
+        button {
+          padding: 12px;
+          background: #00ff88;
+          border: none;
+          font-weight: bold;
+          cursor: pointer;
+        }
+
+        .error {
+          color: #ff4444;
+          font-size: 12px;
         }
 
         .messages {
@@ -252,15 +321,14 @@ export default function App() {
         }
 
         .msg {
-          padding: 12px 14px;
-          border-radius: 4px;
-          font-size: 14px;
+          padding: 12px;
           max-width: 75%;
+          border-radius: 4px;
           word-break: break-word;
         }
 
         .self {
-          background: #00ff00;
+          background: #00ff88;
           color: #000;
           align-self: flex-end;
         }
@@ -278,36 +346,24 @@ export default function App() {
           gap: 10px;
         }
 
-        input {
+        .inputRow input {
           flex: 1;
-          padding: 12px;
-          background: #111;
-          border: 1px solid #222;
-          color: #00ff00;
-          font-family: inherit;
-          font-size: 14px;
         }
 
-        button {
-          padding: 12px 18px;
-          background: #00ff00;
-          border: none;
-          cursor: pointer;
-          font-weight: bold;
+        .footer {
+          text-align: center;
+          padding: 20px;
+          border-top: 1px solid #111;
+          font-size: 12px;
+          opacity: 0.6;
         }
 
-        button:hover {
-          background: #00cc00;
+        .footer a {
+          color: #00ff88;
+          text-decoration: none;
         }
 
-        /* Mobile */
         @media (max-width: 600px) {
-          .topbar {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 6px;
-          }
-
           .msg {
             max-width: 85%;
           }

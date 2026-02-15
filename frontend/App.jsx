@@ -10,11 +10,12 @@ export default function App() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [status, setStatus] = useState("IDLE");
+  const [progress, setProgress] = useState(0);
 
   // Generate device key
   useEffect(() => {
     const stored = localStorage.getItem("visrodeck_device_key");
-
     if (stored) {
       setDeviceKey(stored);
     } else {
@@ -26,24 +27,15 @@ export default function App() {
     }
   }, []);
 
-  // Fetch messages (polling)
+  // Poll messages
   useEffect(() => {
     if (!deviceKey || !connectedKey) return;
 
     const fetchMessages = async () => {
       try {
         const res = await fetch(`${API_URL}/api/messages/${deviceKey}`);
-
-        const contentType = res.headers.get("content-type");
-
-        if (!contentType || !contentType.includes("application/json")) {
-          console.error("Backend returned HTML instead of JSON");
-          return;
-        }
-
         const data = await res.json();
 
-        // Filter only conversation between these two keys
         const filtered = data.filter(
           (m) =>
             (m.senderKey === deviceKey &&
@@ -54,7 +46,7 @@ export default function App() {
 
         setMessages(filtered);
       } catch (err) {
-        console.error("Fetch failed:", err);
+        console.error("Fetch failed", err);
       }
     };
 
@@ -63,11 +55,27 @@ export default function App() {
     return () => clearInterval(interval);
   }, [deviceKey, connectedKey]);
 
-  const connect = () => {
-    if (recipientKey.length === 16) {
-      setConnectedKey(recipientKey);
-      setIsConnected(true);
+  // Cinematic connection sequence
+  const runConnectionSequence = async () => {
+    if (recipientKey.length !== 16) return;
+
+    const phases = [
+      "DEPLOYING KEYS",
+      "CONNECTING TO NODE",
+      "ESTABLISHING SECURE CHANNEL",
+      "AUTHENTICATION VERIFIED",
+    ];
+
+    for (let i = 0; i < phases.length; i++) {
+      setStatus(phases[i]);
+      setProgress((i + 1) * 25);
+      await new Promise((r) => setTimeout(r, 900));
     }
+
+    setConnectedKey(recipientKey);
+    setIsConnected(true);
+    setStatus("READY");
+    setProgress(100);
   };
 
   const sendMessage = async () => {
@@ -81,9 +89,8 @@ export default function App() {
       timestamp: new Date().toISOString(),
     };
 
-    // Show instantly
+    // show instantly
     setMessages((prev) => [...prev, msgObj]);
-
     setMessage("");
 
     try {
@@ -93,12 +100,14 @@ export default function App() {
         body: JSON.stringify(msgObj),
       });
     } catch (err) {
-      console.error("Send failed:", err);
+      console.error("Send failed", err);
     }
   };
 
   return (
     <div className="app">
+
+      {/* TOP BAR */}
       <div className="topbar">
         <div className="brand">
           <Shield size={18} />
@@ -110,8 +119,19 @@ export default function App() {
         </div>
       </div>
 
+      {/* STATUS PANEL */}
+      <div className="statusPanel">
+        <div className="statusText">{status}</div>
+        <div className="progressBar">
+          <div
+            className="progressFill"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
       {!isConnected ? (
-        <div className="connect">
+        <div className="connectBox">
           <input
             placeholder="ENTER 16-DIGIT PEER KEY"
             value={recipientKey}
@@ -121,7 +141,9 @@ export default function App() {
               )
             }
           />
-          <button onClick={connect}>CONNECT</button>
+          <button onClick={runConnectionSequence}>
+            INITIATE CONNECTION
+          </button>
         </div>
       ) : (
         <>
@@ -142,8 +164,8 @@ export default function App() {
 
           <div className="inputRow">
             <input
-              value={message}
               placeholder="TYPE SECURE MESSAGE..."
+              value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendMessage()}
             />
@@ -169,8 +191,8 @@ export default function App() {
         }
 
         .topbar {
-          padding: 20px;
-          border-bottom: 1px solid #222;
+          padding: 20px 30px;
+          border-bottom: 1px solid #111;
           display: flex;
           justify-content: space-between;
         }
@@ -183,10 +205,32 @@ export default function App() {
 
         .keys {
           font-size: 12px;
-          opacity: 0.7;
+          opacity: 0.6;
         }
 
-        .connect {
+        .statusPanel {
+          padding: 20px 30px;
+          border-bottom: 1px solid #111;
+        }
+
+        .statusText {
+          letter-spacing: 2px;
+          margin-bottom: 8px;
+          font-size: 13px;
+        }
+
+        .progressBar {
+          height: 3px;
+          background: #111;
+        }
+
+        .progressFill {
+          height: 100%;
+          background: #00ff00;
+          transition: width 0.4s ease;
+        }
+
+        .connectBox {
           margin: auto;
           width: 400px;
           display: flex;
@@ -196,19 +240,19 @@ export default function App() {
 
         .messages {
           flex: 1;
-          padding: 30px;
+          padding: 40px;
           overflow-y: auto;
         }
 
         .msg {
-          padding: 12px;
-          margin-bottom: 10px;
+          padding: 14px;
+          margin-bottom: 12px;
           border-radius: 6px;
-          max-width: 500px;
+          max-width: 600px;
         }
 
         .self {
-          background: #0f0;
+          background: #00ff00;
           color: #000;
           margin-left: auto;
         }
@@ -218,23 +262,23 @@ export default function App() {
         }
 
         .inputRow {
-          padding: 20px;
-          border-top: 1px solid #222;
+          padding: 20px 30px;
+          border-top: 1px solid #111;
           display: flex;
           gap: 10px;
         }
 
         input {
           flex: 1;
-          padding: 12px;
+          padding: 14px;
           background: #111;
-          border: 1px solid #333;
+          border: 1px solid #222;
           color: #fff;
         }
 
         button {
-          padding: 12px 20px;
-          background: #0f0;
+          padding: 14px 20px;
+          background: #00ff00;
           border: none;
           cursor: pointer;
         }

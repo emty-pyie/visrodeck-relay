@@ -11,10 +11,13 @@ export default function App() {
   const [message, setMessage] = useState("");
 
   const [status, setStatus] = useState("IDLE");
+  const [progress, setProgress] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
 
-  /* ---------------- DEVICE KEY ---------------- */
+  const [backendOnline, setBackendOnline] = useState(false);
+  const [nodeCount, setNodeCount] = useState(0);
 
+  // Generate device key
   useEffect(() => {
     const stored = localStorage.getItem("visrodeck_device_key");
     if (stored) {
@@ -28,8 +31,39 @@ export default function App() {
     }
   }, []);
 
-  /* ---------------- MESSAGE POLLING ---------------- */
+  // Check backend health
+  const checkBackend = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/health`);
+      if (!res.ok) throw new Error();
+      setBackendOnline(true);
+    } catch {
+      setBackendOnline(false);
+    }
+  };
 
+  // Fetch node count
+  const fetchNodeCount = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/nodes/count`);
+      const data = await res.json();
+      setNodeCount(data.activeNodes || 0);
+    } catch {
+      setNodeCount(0);
+    }
+  };
+
+  useEffect(() => {
+    checkBackend();
+    fetchNodeCount();
+    const interval = setInterval(() => {
+      checkBackend();
+      fetchNodeCount();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Poll messages
   useEffect(() => {
     if (!deviceKey || !connectedKey) return;
 
@@ -47,9 +81,7 @@ export default function App() {
         );
 
         setMessages(filtered);
-      } catch (err) {
-        console.error("Polling failed");
-      }
+      } catch {}
     };
 
     fetchMessages();
@@ -57,57 +89,40 @@ export default function App() {
     return () => clearInterval(interval);
   }, [deviceKey, connectedKey]);
 
-  /* ---------------- CONNECT LOGIC ---------------- */
-
-  const runConnection = async () => {
+  const runConnectionSequence = async () => {
     if (recipientKey.length !== 16) return;
 
     setStatus("DEPLOYING KEYS");
-    await wait(700);
+    setProgress(25);
+    await delay(600);
 
     setStatus("CONNECTING TO NODE");
-    await wait(700);
+    setProgress(50);
+    await delay(600);
 
-    // 1️⃣ Check backend health
-    try {
-      const health = await fetch(`${API_URL}/api/health`);
-      if (!health.ok) throw new Error();
-
-      const healthData = await health.json();
-      if (healthData.status !== "online") throw new Error();
-    } catch {
+    if (!backendOnline) {
       setStatus("NODES OFFLINE");
+      setProgress(0);
       return;
     }
 
-    setStatus("VERIFYING PEER KEY");
-    await wait(700);
+    setStatus("VERIFYING PEER");
+    setProgress(75);
+    await delay(600);
 
-    // 2️⃣ Verify peer key
     try {
-      const res = await fetch(`${API_URL}/api/exists/${recipientKey}`);
-      const data = await res.json();
+      const res = await fetch(`${API_URL}/api/messages/${recipientKey}`);
+      if (!res.ok) throw new Error();
 
-      if (!data.exists) {
-        setStatus("KEY CONNECTION FAILED");
-        return;
-      }
+      setConnectedKey(recipientKey);
+      setIsConnected(true);
+      setStatus("READY");
+      setProgress(100);
     } catch {
-      setStatus("KEY CONNECTION FAILED");
-      return;
+      setStatus("CONNECTION FAILED");
+      setProgress(0);
     }
-
-    setStatus("SECURE CHANNEL ESTABLISHED");
-    await wait(700);
-
-    setConnectedKey(recipientKey);
-    setIsConnected(true);
-    setStatus("READY");
   };
-
-  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-
-  /* ---------------- SEND MESSAGE ---------------- */
 
   const sendMessage = async () => {
     if (!message.trim()) return;
@@ -129,28 +144,34 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(msgObj),
       });
-    } catch {
-      console.error("Send failed");
-    }
+    } catch {}
   };
 
-  /* ---------------- UI ---------------- */
+  const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
   return (
     <div className="app">
 
-      <header className="header">
+      <header className="topbar">
         <div className="brand">
-          <Shield size={18} />
+          <Shield size={16} />
           VISRODECK RELAY
         </div>
-        <div className="keys">
-          DEVICE: {deviceKey}
-          {isConnected && <> | PEER: {connectedKey}</>}
+        <div className="network">
+          STATUS: {backendOnline ? "ONLINE" : "NODES DOWN"} |
+          CONNECTED NODES: {nodeCount}
         </div>
       </header>
 
-      <div className="statusBar">{status}</div>
+      <div className="statusPanel">
+        <div className="statusText">{status}</div>
+        <div className="progressBar">
+          <div
+            className="progressFill"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
 
       {!isConnected ? (
         <div className="connectBox">
@@ -163,7 +184,7 @@ export default function App() {
               )
             }
           />
-          <button onClick={runConnection}>
+          <button onClick={runConnectionSequence}>
             INITIATE CONNECTION
           </button>
         </div>
@@ -199,20 +220,29 @@ export default function App() {
       )}
 
       <footer className="footer">
-        <div>Visrodeck Relay</div>
-        <div>Powered by Visrodeck Technology</div>
-        <div>All rights reserved</div>
-        <a href="https://visrodeck.com" target="_blank">
-          Visit Visrodeck.com
-        </a>
+        <div className="footer-inner">
+          <div>
+            <div className="footer-title">Visrodeck Relay</div>
+            <div className="footer-sub">
+              Powered by Visrodeck Technology
+            </div>
+          </div>
+          <div className="footer-right">
+            <div>All rights reserved</div>
+            <a href="https://visrodeck.com" target="_blank" rel="noreferrer">
+              Visit Visrodeck.com
+            </a>
+          </div>
+        </div>
       </footer>
 
       <style>{`
+
         body {
           margin: 0;
-          background: #0a0f14;
-          color: #e0e6ed;
-          font-family: system-ui, sans-serif;
+          background: #060606;
+          color: #d6ffd6;
+          font-family: "Courier New", monospace;
         }
 
         .app {
@@ -221,32 +251,48 @@ export default function App() {
           flex-direction: column;
         }
 
-        .header {
-          padding: 18px 28px;
-          border-bottom: 1px solid #1c252e;
+        .topbar {
+          padding: 16px 40px;
+          border-bottom: 1px solid #111;
           display: flex;
           justify-content: space-between;
+          font-size: 12px;
+          letter-spacing: 1px;
         }
 
         .brand {
-          font-weight: 600;
-          color: #4df3a3;
           display: flex;
           gap: 8px;
           align-items: center;
+          color: #7aff7a;
+          font-weight: 600;
         }
 
-        .keys {
+        .network {
+          opacity: 0.7;
+        }
+
+        .statusPanel {
+          padding: 16px 40px;
+          border-bottom: 1px solid #111;
+        }
+
+        .statusText {
+          margin-bottom: 8px;
           font-size: 12px;
-          opacity: 0.6;
+          letter-spacing: 2px;
+          color: #7aff7a;
         }
 
-        .statusBar {
-          padding: 14px 28px;
-          font-size: 13px;
-          letter-spacing: 1px;
-          border-bottom: 1px solid #1c252e;
-          color: #4df3a3;
+        .progressBar {
+          height: 2px;
+          background: #111;
+        }
+
+        .progressFill {
+          height: 100%;
+          background: #4caf50;
+          transition: width 0.3s ease;
         }
 
         .connectBox {
@@ -259,28 +305,28 @@ export default function App() {
         }
 
         input {
-          padding: 14px;
-          background: #141b22;
-          border: 1px solid #1f2a33;
-          color: #fff;
-          font-size: 14px;
+          padding: 12px;
+          background: #111;
+          border: 1px solid #222;
+          color: #d6ffd6;
+          font-family: inherit;
         }
 
         button {
-          padding: 14px;
-          background: #4df3a3;
-          border: none;
-          font-weight: 600;
+          padding: 12px;
+          background: #1a1a1a;
+          border: 1px solid #2a2a2a;
+          color: #7aff7a;
           cursor: pointer;
         }
 
         button:hover {
-          background: #37c983;
+          background: #111;
         }
 
         .messages {
           flex: 1;
-          padding: 24px;
+          padding: 24px 40px;
           overflow-y: auto;
           display: flex;
           flex-direction: column;
@@ -288,42 +334,75 @@ export default function App() {
         }
 
         .msg {
-          padding: 12px 16px;
-          border-radius: 6px;
+          padding: 12px 14px;
+          border-radius: 4px;
           max-width: 70%;
         }
 
         .self {
-          background: #4df3a3;
-          color: #000;
           align-self: flex-end;
+          background: #0f2a0f;
+          border: 1px solid #1d441d;
         }
 
         .other {
-          background: #1c252e;
-          border: 1px solid #26333d;
+          align-self: flex-start;
+          background: #111;
+          border: 1px solid #222;
         }
 
         .inputRow {
           display: flex;
-          padding: 16px 24px;
-          gap: 12px;
-          border-top: 1px solid #1c252e;
+          padding: 16px 40px;
+          gap: 10px;
+          border-top: 1px solid #111;
+        }
+
+        .inputRow input {
+          flex: 1;
         }
 
         .footer {
-          margin-top: auto;
-          padding: 24px;
-          text-align: center;
-          font-size: 13px;
-          border-top: 1px solid #1c252e;
-          background: #0d1319;
-          color: #8fa3b0;
+          border-top: 1px solid #111;
+          background: #070707;
+          padding: 28px 40px;
+          font-size: 12px;
         }
 
-        .footer a {
-          color: #4df3a3;
+        .footer-inner {
+          max-width: 1200px;
+          margin: auto;
+          display: flex;
+          justify-content: space-between;
+        }
+
+        .footer-title {
+          font-weight: 600;
+          color: #7aff7a;
+          margin-bottom: 4px;
+        }
+
+        .footer-sub {
+          opacity: 0.6;
+        }
+
+        .footer-right {
+          text-align: right;
+          opacity: 0.7;
+        }
+
+        .footer-right a {
+          display: block;
+          margin-top: 6px;
+          color: #7aff7a;
           text-decoration: none;
+        }
+
+        @media (max-width: 700px) {
+          .footer-inner {
+            flex-direction: column;
+            gap: 10px;
+          }
         }
 
       `}</style>

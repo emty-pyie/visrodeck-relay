@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Shield, Key, Send, Zap, Radio } from 'lucide-react';
 
-// ✅ NGROK API URL - Your backend is now accessible online!
+// ✅ NGROK API URL backend
 const API_URL = 'https://lilian-interindividual-merle.ngrok-free.dev';
 
 export default function App() {
@@ -129,7 +129,7 @@ export default function App() {
     const encryptedMsg = btoa(message); // Simple base64 for demo
     
     try {
-      // ✅ UPDATED: Now using ngrok URL instead of localhost
+      // using ngrok URL instead of localhost
       const response = await fetch(`${API_URL}/api/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -161,7 +161,7 @@ export default function App() {
     if (!isConnected) return;
 
     try {
-      // ✅ UPDATED: Now using ngrok URL instead of localhost
+      // ngrok URL 
       const response = await fetch(`${API_URL}/api/messages/${deviceKey}`);
       const data = await response.json();
       

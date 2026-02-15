@@ -23,7 +23,12 @@ const PORT = 3001;  // Backend server port
 // Enable CORS (Cross-Origin Resource Sharing)
 // Allows frontend (localhost:3000) to communicate with backend (localhost:3001)
 app.use(cors({
-  origin: '*'  // Allow all origins
+  origin: [
+    "https://relay.visrodeck.com",
+    "http://localhost:3000"
+  ],
+  methods: ["GET", "POST", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type"], // Allow all origins
 }));
 
 // Parse incoming JSON request bodies

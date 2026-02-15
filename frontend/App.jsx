@@ -1,19 +1,16 @@
 import React, { useState, useEffect } from "react";
+import { Shield } from "lucide-react";
 
 const API_URL = "https://lilian-interindividual-merle.ngrok-free.dev";
 
 export default function App() {
+
   const [deviceKey, setDeviceKey] = useState("");
   const [recipientKey, setRecipientKey] = useState("");
   const [connectedKey, setConnectedKey] = useState("");
-  const [messages, setMessages] = useState([]);
-  const [message, setMessage] = useState("");
-  const [isConnected, setIsConnected] = useState(false);
-
   const [networkOnline, setNetworkOnline] = useState(false);
   const [nodeCount, setNodeCount] = useState(0);
   const [status, setStatus] = useState("IDLE");
-  const [progress, setProgress] = useState(0);
 
   // Generate device key
   useEffect(() => {
@@ -45,37 +42,9 @@ export default function App() {
     };
 
     checkHealth();
-    const interval = setInterval(checkHealth, 5000);
+    const interval = setInterval(checkHealth, 4000);
     return () => clearInterval(interval);
   }, []);
-
-  // Poll messages
-  useEffect(() => {
-    if (!deviceKey || !connectedKey) return;
-
-    const fetchMessages = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/messages/${deviceKey}`);
-        if (!res.ok) return;
-
-        const data = await res.json();
-
-        const filtered = data.filter(
-          (m) =>
-            (m.senderKey === deviceKey &&
-              m.recipientKey === connectedKey) ||
-            (m.senderKey === connectedKey &&
-              m.recipientKey === deviceKey)
-        );
-
-        setMessages(filtered);
-      } catch {}
-    };
-
-    fetchMessages();
-    const interval = setInterval(fetchMessages, 2000);
-    return () => clearInterval(interval);
-  }, [deviceKey, connectedKey]);
 
   const runConnectionSequence = async () => {
     if (!networkOnline) {
@@ -84,85 +53,57 @@ export default function App() {
     }
 
     if (recipientKey.length !== 16) {
-      setStatus("INVALID KEY FORMAT");
+      setStatus("INVALID KEY");
       return;
     }
 
-    setStatus("DEPLOYING KEYS");
-    setProgress(25);
-    await new Promise((r) => setTimeout(r, 700));
-
-    setStatus("CONNECTING TO NODE");
-    setProgress(50);
-    await new Promise((r) => setTimeout(r, 700));
+    setStatus("CONNECTING TO NODE...");
+    await new Promise(r => setTimeout(r, 800));
 
     try {
       const res = await fetch(`${API_URL}/api/messages/${recipientKey}`);
       if (!res.ok) throw new Error();
 
-      setStatus("AUTHENTICATING");
-      setProgress(75);
-      await new Promise((r) => setTimeout(r, 700));
-
       setConnectedKey(recipientKey);
-      setIsConnected(true);
       setStatus("SECURE CHANNEL ESTABLISHED");
-      setProgress(100);
     } catch {
       setStatus("CONNECTION FAILED");
-      setProgress(0);
     }
   };
 
-  const sendMessage = async () => {
-    if (!message.trim() || !connectedKey) return;
-
-    const msgObj = {
-      id: Date.now(),
-      senderKey: deviceKey,
-      recipientKey: connectedKey,
-      encryptedData: message,
-      timestamp: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, msgObj]);
-    setMessage("");
-
-    try {
-      await fetch(`${API_URL}/api/message`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(msgObj),
-      });
-    } catch {}
-  };
-
   return (
-    <div className="app">
+    <div className="wrapper">
 
-      <header className="topbar">
-        <div className="brand">VISRODECK RELAY</div>
+      {/* HEADER */}
+      <header className="header">
 
-        <div className="devicePanel">
-          <div>DEVICE KEY: {deviceKey}</div>
-          {isConnected && <div>PEER: {connectedKey}</div>}
+        <div className="brand">
+          <Shield size={20} />
+          <span>VISRODECK RELAY</span>
         </div>
 
-        <div className="networkInfo">
-          STATUS: {networkOnline ? "ONLINE" : "NODES DOWN"} |
-          CONNECTED NODES: {nodeCount}
+        <div className="deviceBlock">
+          <div className="label">DEVICE KEY</div>
+          <div className="deviceKey">{deviceKey}</div>
         </div>
+
+        <div className="networkBlock">
+          <div>
+            STATUS: {networkOnline ? "ONLINE" : "NODES DOWN"}
+          </div>
+          <div>
+            CONNECTED NODES: {nodeCount}
+          </div>
+        </div>
+
       </header>
 
-      <div className="statusBar">
-        <div>{status}</div>
-        <div className="progress">
-          <div style={{ width: `${progress}%` }} />
-        </div>
-      </div>
+      {/* MAIN CONTENT */}
+      <main className="main">
 
-      {!isConnected ? (
-        <div className="connectBox">
+        <div className="statusLine">{status}</div>
+
+        <div className="connectCard">
           <input
             placeholder="ENTER 16-DIGIT PEER KEY"
             value={recipientKey}
@@ -176,42 +117,19 @@ export default function App() {
             INITIATE CONNECTION
           </button>
         </div>
-      ) : (
-        <>
-          <div className="messages">
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={
-                  m.senderKey === deviceKey
-                    ? "msg self"
-                    : "msg other"
-                }
-              >
-                {m.encryptedData}
-              </div>
-            ))}
-          </div>
 
-          <div className="inputRow">
-            <input
-              placeholder="TYPE SECURE MESSAGE..."
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            />
-            <button onClick={sendMessage}>SEND</button>
-          </div>
-        </>
-      )}
+      </main>
 
+      {/* FOOTER */}
       <footer className="footer">
-        <div>Visrodeck Relay</div>
-        <div>Powered by Visrodeck Technology</div>
-        <div>All rights reserved</div>
-        <a href="https://visrodeck.com" target="_blank">
-          Visit Visrodeck.com
-        </a>
+        <div className="footerContent">
+          <div className="footerTitle">Visrodeck Relay</div>
+          <div>Powered by Visrodeck Technology</div>
+          <div>All rights reserved</div>
+          <a href="https://visrodeck.com" target="_blank">
+            Visit Visrodeck.com
+          </a>
+        </div>
       </footer>
 
       <style>{`
@@ -219,139 +137,142 @@ export default function App() {
         body {
           margin: 0;
           background: #050505;
-          color: #c8ffd8;
+          color: #d6ffe6;
           font-family: monospace;
         }
 
-        .app {
+        .wrapper {
           min-height: 100vh;
           display: flex;
           flex-direction: column;
         }
 
-        .topbar {
-          padding: 16px 24px;
-          border-bottom: 1px solid #111;
+        /* HEADER */
+
+        .header {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          font-size: 12px;
+          padding: 20px 40px;
+          border-bottom: 1px solid #111;
+          background: #0a0a0a;
         }
 
         .brand {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-weight: bold;
+          color: #00ff88;
+          font-size: 16px;
+        }
+
+        .deviceBlock {
+          text-align: center;
+        }
+
+        .label {
+          font-size: 11px;
+          opacity: 0.6;
+        }
+
+        .deviceKey {
+          font-size: 18px;
+          letter-spacing: 2px;
           color: #00ff88;
           font-weight: bold;
-          letter-spacing: 1px;
         }
 
-        .devicePanel {
-          text-align: center;
-          font-size: 11px;
+        .networkBlock {
+          text-align: right;
+          font-size: 12px;
+          opacity: 0.7;
         }
 
-        .networkInfo {
-          font-size: 11px;
-          color: #888;
+        /* MAIN */
+
+        .main {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          padding: 40px;
         }
 
-        .statusBar {
-          padding: 10px 24px;
-          border-bottom: 1px solid #111;
+        .statusLine {
+          margin-bottom: 20px;
+          font-size: 14px;
+          letter-spacing: 2px;
+          color: #00ff88;
         }
 
-        .progress {
-          height: 2px;
-          background: #111;
-          margin-top: 6px;
-        }
-
-        .progress div {
-          height: 100%;
-          background: #00ff88;
-          transition: width 0.3s ease;
-        }
-
-        .connectBox {
-          margin: auto;
-          width: 90%;
-          max-width: 400px;
+        .connectCard {
+          width: 100%;
+          max-width: 420px;
           display: flex;
           flex-direction: column;
           gap: 12px;
         }
 
-        .messages {
-          flex: 1;
-          padding: 20px;
-          overflow-y: auto;
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-
-        .msg {
-          padding: 10px 14px;
-          border-radius: 4px;
-          max-width: 70%;
-        }
-
-        .self {
-          background: #00ff88;
-          color: #000;
-          align-self: flex-end;
-        }
-
-        .other {
-          background: #111;
-          border: 1px solid #222;
-          align-self: flex-start;
-        }
-
-        .inputRow {
-          display: flex;
-          padding: 16px;
-          border-top: 1px solid #111;
-          gap: 10px;
-        }
-
         input {
-          flex: 1;
-          padding: 10px;
+          padding: 14px;
           background: #111;
           border: 1px solid #222;
           color: #00ff88;
+          font-size: 14px;
         }
 
         button {
-          padding: 10px 16px;
+          padding: 14px;
           background: #00ff88;
           border: none;
           font-weight: bold;
           cursor: pointer;
+          font-size: 14px;
         }
 
         button:hover {
           background: #00cc66;
         }
 
+        /* FOOTER */
+
         .footer {
+          background: #0a0a0a;
           border-top: 1px solid #111;
-          padding: 20px;
+          padding: 30px 20px;
           text-align: center;
-          font-size: 12px;
-          background: #070707;
+        }
+
+        .footerTitle {
+          font-weight: bold;
+          margin-bottom: 8px;
+          color: #00ff88;
         }
 
         .footer a {
+          display: inline-block;
+          margin-top: 6px;
           color: #00ff88;
           text-decoration: none;
         }
 
-        @media (max-width: 600px) {
-          .topbar {
+        /* MOBILE */
+
+        @media (max-width: 768px) {
+          .header {
             flex-direction: column;
-            gap: 6px;
+            gap: 14px;
             text-align: center;
+          }
+
+          .networkBlock {
+            text-align: center;
+          }
+
+          .deviceKey {
+            font-size: 16px;
           }
         }
 

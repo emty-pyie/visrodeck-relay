@@ -1,119 +1,150 @@
-import React, { useState, useEffect } from 'react';
-import { Shield, Key, Send, Radio } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { Shield, Send } from "lucide-react";
 
-const API_URL = 'https://lilian-interindividual-merle.ngrok-free.dev';
+const API_URL = "https://lilian-interindividual-merle.ngrok-free.dev";
 
 export default function App() {
-  const [deviceKey, setDeviceKey] = useState('');
-  const [recipientKey, setRecipientKey] = useState('');
-  const [message, setMessage] = useState('');
+  const [deviceKey, setDeviceKey] = useState("");
+  const [recipientKey, setRecipientKey] = useState("");
+  const [connectedKey, setConnectedKey] = useState("");
+  const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
+  const [statusPhase, setStatusPhase] = useState("IDLE");
+  const [progress, setProgress] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
 
   useEffect(() => {
     const generateKey = () =>
-      Array.from({ length: 16 }, () => Math.floor(Math.random() * 10)).join('');
+      Array.from({ length: 16 }, () => Math.floor(Math.random() * 10)).join("");
 
-    const storedKey = localStorage.getItem('visrodeck_device_key');
-    if (!storedKey) {
+    const stored = localStorage.getItem("visrodeck_device_key");
+    if (!stored) {
       const newKey = generateKey();
-      localStorage.setItem('visrodeck_device_key', newKey);
+      localStorage.setItem("visrodeck_device_key", newKey);
       setDeviceKey(newKey);
     } else {
-      setDeviceKey(storedKey);
+      setDeviceKey(stored);
     }
   }, []);
 
-  const connectToNode = async () => {
+  const runConnectionSequence = async () => {
     if (recipientKey.length !== 16) return;
-    setIsConnecting(true);
-    await new Promise(r => setTimeout(r, 1200));
-    setIsConnecting(false);
+
+    const phases = [
+      "DEPLOYING KEYS",
+      "CONNECTING TO NODE",
+      "ESTABLISHING SECURE CHANNEL",
+      "AUTHENTICATION VERIFIED",
+    ];
+
+    for (let i = 0; i < phases.length; i++) {
+      setStatusPhase(phases[i]);
+      setProgress((i + 1) * 25);
+      await new Promise((r) => setTimeout(r, 900));
+    }
+
+    setConnectedKey(recipientKey);
     setIsConnected(true);
+    setStatusPhase("READY");
   };
 
   const sendMessage = async () => {
     if (!message.trim()) return;
 
-    const encryptedMsg = btoa(message);
+    setStatusPhase("TRANSMITTING MESSAGE");
+    setProgress(90);
+
+    const encrypted = btoa(message);
 
     try {
       await fetch(`${API_URL}/api/message`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           senderKey: deviceKey,
-          recipientKey,
-          encryptedData: encryptedMsg,
-          timestamp: new Date().toISOString()
-        })
+          recipientKey: connectedKey,
+          encryptedData: encrypted,
+          timestamp: new Date().toISOString(),
+        }),
       });
 
-      setMessages(prev => [
+      setMessages((prev) => [
         ...prev,
         {
           id: Date.now(),
           text: message,
-          sender: 'you',
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       ]);
 
-      setMessage('');
+      setMessage("");
+      setProgress(100);
+      setTimeout(() => {
+        setStatusPhase("READY");
+        setProgress(100);
+      }, 600);
     } catch (err) {
-      console.error(err);
+      setStatusPhase("TRANSMISSION FAILED");
     }
   };
 
   return (
     <div className="app">
-      <div className="container">
+      <div className="dashboard">
 
-        <header className="header">
-          <Shield size={36} />
-          <h1>VISRODECK RELAY</h1>
-        </header>
-
-        <div className="device-box">
-          <div className="label">
-            <Key size={16} /> YOUR DEVICE KEY
+        {/* TOP BAR */}
+        <div className="topbar">
+          <div className="left">
+            <Shield size={18} />
+            <span>VISRODECK RELAY</span>
           </div>
-          <div className="key">{deviceKey}</div>
+          <div className="right">
+            <span>DEVICE: {deviceKey}</span>
+            {isConnected && (
+              <span className="peer">PEER: {connectedKey}</span>
+            )}
+          </div>
+        </div>
+
+        {/* STATUS MODULE */}
+        <div className="status">
+          <div className="phase">{statusPhase}</div>
+          <div className="progressbar">
+            <div
+              className="progress"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
 
         {!isConnected ? (
-          <div className="card">
-            <h2><Radio size={18}/> Secure Connection</h2>
-
+          <div className="connect-panel">
             <input
               type="text"
-              placeholder="Recipient 16-digit key"
+              placeholder="ENTER 16-DIGIT PEER KEY"
               value={recipientKey}
               onChange={(e) =>
-                setRecipientKey(e.target.value.replace(/\D/g, '').slice(0, 16))
+                setRecipientKey(
+                  e.target.value.replace(/\D/g, "").slice(0, 16)
+                )
               }
             />
-
             <button
-              onClick={connectToNode}
-              disabled={recipientKey.length !== 16 || isConnecting}
+              disabled={recipientKey.length !== 16}
+              onClick={runConnectionSequence}
             >
-              {isConnecting ? 'Connecting...' : 'Connect'}
+              INITIATE CONNECTION
             </button>
           </div>
         ) : (
-          <div className="card">
+          <div className="console">
             <div className="messages">
               {messages.length === 0 ? (
-                <p className="empty">No messages yet</p>
+                <div className="empty">NO ACTIVE TRANSMISSIONS</div>
               ) : (
-                messages.map(msg => (
-                  <div
-                    key={msg.id}
-                    className={`msg ${msg.sender === 'you' ? 'you' : 'them'}`}
-                  >
-                    {msg.text}
+                messages.map((m) => (
+                  <div key={m.id} className="msg">
+                    {m.text}
                   </div>
                 ))
               )}
@@ -122,13 +153,13 @@ export default function App() {
             <div className="input-row">
               <input
                 type="text"
-                placeholder="Type message..."
+                placeholder="TYPE SECURE MESSAGE..."
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
               />
               <button onClick={sendMessage}>
-                <Send size={16}/>
+                <Send size={16} />
               </button>
             </div>
           </div>
@@ -140,81 +171,92 @@ export default function App() {
           margin: 0;
           background: #000;
           color: #fff;
-          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+          font-family: system-ui, -apple-system, sans-serif;
         }
 
         .app {
           min-height: 100vh;
           display: flex;
           justify-content: center;
-          padding: 20px;
+          padding: 40px 20px;
         }
 
-        .container {
+        .dashboard {
           width: 100%;
-          max-width: 500px;
+          max-width: 1000px;
+          display: flex;
+          flex-direction: column;
+          gap: 30px;
         }
 
-        .header {
-          text-align: center;
-          margin-bottom: 24px;
+        .topbar {
+          display: flex;
+          justify-content: space-between;
+          font-size: 13px;
+          letter-spacing: 1px;
+          border-bottom: 1px solid #222;
+          padding-bottom: 12px;
         }
 
-        .header h1 {
-          margin: 10px 0 0;
-          font-size: 20px;
+        .topbar .left {
+          display: flex;
+          gap: 8px;
+          align-items: center;
           font-weight: 600;
-          letter-spacing: 2px;
         }
 
-        .device-box {
-          border: 1px solid #222;
-          padding: 16px;
-          border-radius: 8px;
-          margin-bottom: 20px;
-          background: #0a0a0a;
+        .topbar .right {
+          display: flex;
+          gap: 20px;
+          opacity: 0.7;
         }
 
-        .label {
-          font-size: 12px;
-          opacity: 0.6;
-          margin-bottom: 8px;
+        .peer {
+          opacity: 1;
         }
 
-        .key {
-          font-size: 16px;
-          letter-spacing: 2px;
-        }
-
-        .card {
+        .status {
           border: 1px solid #222;
           padding: 20px;
-          border-radius: 12px;
-          background: #0a0a0a;
+          border-radius: 8px;
         }
 
-        input {
+        .phase {
+          font-size: 14px;
+          margin-bottom: 10px;
+          letter-spacing: 2px;
+        }
+
+        .progressbar {
+          height: 4px;
+          background: #111;
+          border-radius: 4px;
+          overflow: hidden;
+        }
+
+        .progress {
+          height: 100%;
+          background: #fff;
+          transition: width 0.4s ease;
+        }
+
+        .connect-panel input,
+        .console input {
           width: 100%;
-          padding: 12px;
+          padding: 14px;
           background: #111;
           border: 1px solid #333;
           border-radius: 6px;
           color: #fff;
-          margin-bottom: 12px;
-        }
-
-        input:focus {
-          outline: none;
-          border-color: #666;
         }
 
         button {
+          padding: 14px;
+          margin-top: 12px;
           width: 100%;
-          padding: 12px;
           background: #fff;
           color: #000;
           border: none;
-          border-radius: 6px;
           font-weight: 600;
           cursor: pointer;
         }
@@ -225,45 +267,58 @@ export default function App() {
           cursor: not-allowed;
         }
 
+        .console {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+
         .messages {
-          max-height: 300px;
+          min-height: 300px;
+          border: 1px solid #222;
+          padding: 20px;
+          border-radius: 8px;
           overflow-y: auto;
-          margin-bottom: 12px;
         }
 
         .msg {
+          margin-bottom: 10px;
           padding: 10px;
-          margin-bottom: 8px;
-          border-radius: 6px;
-          font-size: 14px;
-        }
-
-        .msg.you {
           background: #111;
-          text-align: right;
+          border-radius: 4px;
         }
 
-        .msg.them {
-          background: #1a1a1a;
-          text-align: left;
+        .empty {
+          opacity: 0.4;
         }
 
         .input-row {
           display: flex;
-          gap: 8px;
+          gap: 10px;
         }
 
         .input-row input {
-          margin-bottom: 0;
+          flex: 1;
         }
 
         .input-row button {
-          width: 60px;
+          width: 80px;
+          margin-top: 0;
         }
 
-        @media (max-width: 480px) {
-          .container {
-            max-width: 100%;
+        @media (max-width: 768px) {
+          .dashboard {
+            gap: 20px;
+          }
+          .topbar {
+            flex-direction: column;
+            gap: 8px;
+          }
+          .input-row {
+            flex-direction: column;
+          }
+          .input-row button {
+            width: 100%;
           }
         }
       `}</style>

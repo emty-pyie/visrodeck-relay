@@ -9,96 +9,89 @@ export default function App() {
   const [connectedKey, setConnectedKey] = useState("");
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
-  const [statusPhase, setStatusPhase] = useState("IDLE");
-  const [progress, setProgress] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
 
-  // Generate / Load Device Key
+  // Generate device key
   useEffect(() => {
-    const generateKey = () =>
-      Array.from({ length: 16 }, () =>
-        Math.floor(Math.random() * 10)
-      ).join("");
-
     const stored = localStorage.getItem("visrodeck_device_key");
 
-    if (!stored) {
-      const newKey = generateKey();
-      localStorage.setItem("visrodeck_device_key", newKey);
-      setDeviceKey(newKey);
-    } else {
+    if (stored) {
       setDeviceKey(stored);
+    } else {
+      const key = Array.from({ length: 16 }, () =>
+        Math.floor(Math.random() * 10)
+      ).join("");
+      localStorage.setItem("visrodeck_device_key", key);
+      setDeviceKey(key);
     }
   }, []);
 
-  // Fetch Messages (Polling)
+  // Fetch messages (polling)
   useEffect(() => {
-    if (!deviceKey) return;
+    if (!deviceKey || !connectedKey) return;
 
     const fetchMessages = async () => {
       try {
-        const res = await fetch(
-          `${API_URL}/api/messages/${deviceKey}`
-        );
+        const res = await fetch(`${API_URL}/api/messages/${deviceKey}`);
+
+        const contentType = res.headers.get("content-type");
+
+        if (!contentType || !contentType.includes("application/json")) {
+          console.error("Backend returned HTML instead of JSON");
+          return;
+        }
+
         const data = await res.json();
 
-        setMessages(
-          data.map((m) => ({
-            id: m.id,
-            text: m.encryptedData,
-            timestamp: m.timestamp,
-          }))
+        // Filter only conversation between these two keys
+        const filtered = data.filter(
+          (m) =>
+            (m.senderKey === deviceKey &&
+              m.recipientKey === connectedKey) ||
+            (m.senderKey === connectedKey &&
+              m.recipientKey === deviceKey)
         );
+
+        setMessages(filtered);
       } catch (err) {
         console.error("Fetch failed:", err);
       }
     };
 
     fetchMessages();
-    const interval = setInterval(fetchMessages, 3000);
+    const interval = setInterval(fetchMessages, 2000);
     return () => clearInterval(interval);
-  }, [deviceKey]);
+  }, [deviceKey, connectedKey]);
 
-  // Connection Animation
-  const runConnectionSequence = async () => {
-    if (recipientKey.length !== 16) return;
-
-    const phases = [
-      "DEPLOYING KEYS",
-      "CONNECTING TO NODE",
-      "ESTABLISHING SECURE CHANNEL",
-      "AUTHENTICATION VERIFIED",
-    ];
-
-    for (let i = 0; i < phases.length; i++) {
-      setStatusPhase(phases[i]);
-      setProgress((i + 1) * 25);
-      await new Promise((r) => setTimeout(r, 800));
+  const connect = () => {
+    if (recipientKey.length === 16) {
+      setConnectedKey(recipientKey);
+      setIsConnected(true);
     }
-
-    setConnectedKey(recipientKey);
-    setIsConnected(true);
-    setStatusPhase("READY");
-    setProgress(100);
   };
 
-  // Send Message
   const sendMessage = async () => {
-    if (!message.trim() || !connectedKey) return;
+    if (!message.trim()) return;
+
+    const msgObj = {
+      id: Date.now(),
+      senderKey: deviceKey,
+      recipientKey: connectedKey,
+      encryptedData: message,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Show instantly
+    setMessages((prev) => [...prev, msgObj]);
+
+    setMessage("");
 
     try {
       await fetch(`${API_URL}/api/message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          senderKey: deviceKey,
-          recipientKey: connectedKey,
-          encryptedData: message,
-          timestamp: new Date().toISOString(),
-        }),
+        body: JSON.stringify(msgObj),
       });
-
-      setMessage("");
     } catch (err) {
       console.error("Send failed:", err);
     }
@@ -106,240 +99,144 @@ export default function App() {
 
   return (
     <div className="app">
-      <div className="dashboard">
-
-        {/* TOP BAR */}
-        <div className="topbar">
-          <div className="left">
-            <Shield size={18} />
-            <span>VISRODECK RELAY</span>
-          </div>
-          <div className="right">
-            <span>DEVICE: {deviceKey}</span>
-            {isConnected && (
-              <span className="peer">PEER: {connectedKey}</span>
-            )}
-          </div>
+      <div className="topbar">
+        <div className="brand">
+          <Shield size={18} />
+          VISRODECK RELAY
         </div>
-
-        {/* STATUS */}
-        <div className="status">
-          <div className="phase">{statusPhase}</div>
-          <div className="progressbar">
-            <div
-              className="progress"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
+        <div className="keys">
+          DEVICE: {deviceKey}
+          {isConnected && <> | PEER: {connectedKey}</>}
         </div>
+      </div>
 
-        {!isConnected ? (
-          <div className="connect-panel">
+      {!isConnected ? (
+        <div className="connect">
+          <input
+            placeholder="ENTER 16-DIGIT PEER KEY"
+            value={recipientKey}
+            onChange={(e) =>
+              setRecipientKey(
+                e.target.value.replace(/\D/g, "").slice(0, 16)
+              )
+            }
+          />
+          <button onClick={connect}>CONNECT</button>
+        </div>
+      ) : (
+        <>
+          <div className="messages">
+            {messages.map((m) => (
+              <div
+                key={m.id}
+                className={
+                  m.senderKey === deviceKey
+                    ? "msg self"
+                    : "msg other"
+                }
+              >
+                {m.encryptedData}
+              </div>
+            ))}
+          </div>
+
+          <div className="inputRow">
             <input
-              type="text"
-              placeholder="ENTER 16-DIGIT PEER KEY"
-              value={recipientKey}
-              onChange={(e) =>
-                setRecipientKey(
-                  e.target.value.replace(/\D/g, "").slice(0, 16)
-                )
-              }
+              value={message}
+              placeholder="TYPE SECURE MESSAGE..."
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
             />
-            <button
-              disabled={recipientKey.length !== 16}
-              onClick={runConnectionSequence}
-            >
-              INITIATE CONNECTION
+            <button onClick={sendMessage}>
+              <Send size={16} />
             </button>
           </div>
-        ) : (
-          <div className="console">
-            <div className="messages">
-              {messages.length === 0 ? (
-                <div className="empty">NO ACTIVE TRANSMISSIONS</div>
-              ) : (
-                messages.map((m) => (
-                  <div key={m.id} className="msg">
-                    {m.text}
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="input-row">
-              <input
-                type="text"
-                placeholder="TYPE SECURE MESSAGE..."
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={(e) =>
-                  e.key === "Enter" && sendMessage()
-                }
-              />
-              <button onClick={sendMessage}>
-                <Send size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+        </>
+      )}
 
       <style>{`
         body {
           margin: 0;
           background: #000;
           color: #fff;
-          font-family: system-ui, sans-serif;
+          font-family: system-ui;
         }
 
         .app {
-          min-height: 100vh;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          padding: 40px 20px;
-        }
-
-        .dashboard {
-          width: 100%;
-          max-width: 900px;
+          height: 100vh;
           display: flex;
           flex-direction: column;
-          gap: 30px;
         }
 
         .topbar {
+          padding: 20px;
+          border-bottom: 1px solid #222;
           display: flex;
           justify-content: space-between;
-          font-size: 13px;
-          letter-spacing: 1px;
-          border-bottom: 1px solid #222;
-          padding-bottom: 12px;
         }
 
-        .topbar .left {
+        .brand {
           display: flex;
-          gap: 8px;
-          align-items: center;
+          gap: 10px;
           font-weight: 600;
         }
 
-        .topbar .right {
-          display: flex;
-          gap: 20px;
+        .keys {
+          font-size: 12px;
           opacity: 0.7;
         }
 
-        .peer {
-          color: #0f0;
-        }
-
-        .status {
-          border: 1px solid #222;
-          padding: 20px;
-          border-radius: 8px;
-          background: #0a0a0a;
-        }
-
-        .phase {
-          font-size: 14px;
-          margin-bottom: 10px;
-          letter-spacing: 2px;
-        }
-
-        .progressbar {
-          height: 4px;
-          background: #111;
-          border-radius: 4px;
-          overflow: hidden;
-        }
-
-        .progress {
-          height: 100%;
-          background: #0f0;
-          transition: width 0.4s ease;
-        }
-
-        .connect-panel input,
-        .console input {
-          width: 100%;
-          padding: 14px;
-          background: #111;
-          border: 1px solid #333;
-          border-radius: 6px;
-          color: #fff;
-        }
-
-        button {
-          padding: 14px;
-          margin-top: 12px;
-          width: 100%;
-          background: #0f0;
-          color: #000;
-          border: none;
-          font-weight: 600;
-          cursor: pointer;
-        }
-
-        button:disabled {
-          background: #222;
-          color: #555;
-          cursor: not-allowed;
-        }
-
-        .console {
+        .connect {
+          margin: auto;
+          width: 400px;
           display: flex;
           flex-direction: column;
-          gap: 20px;
+          gap: 15px;
         }
 
         .messages {
-          min-height: 300px;
-          border: 1px solid #222;
-          padding: 20px;
-          border-radius: 8px;
+          flex: 1;
+          padding: 30px;
           overflow-y: auto;
-          background: #0a0a0a;
         }
 
         .msg {
+          padding: 12px;
           margin-bottom: 10px;
-          padding: 10px;
+          border-radius: 6px;
+          max-width: 500px;
+        }
+
+        .self {
+          background: #0f0;
+          color: #000;
+          margin-left: auto;
+        }
+
+        .other {
           background: #111;
-          border-radius: 4px;
         }
 
-        .empty {
-          opacity: 0.4;
-        }
-
-        .input-row {
+        .inputRow {
+          padding: 20px;
+          border-top: 1px solid #222;
           display: flex;
           gap: 10px;
         }
 
-        .input-row input {
+        input {
           flex: 1;
+          padding: 12px;
+          background: #111;
+          border: 1px solid #333;
+          color: #fff;
         }
 
-        .input-row button {
-          width: 80px;
-          margin-top: 0;
-        }
-
-        @media (max-width: 768px) {
-          .topbar {
-            flex-direction: column;
-            gap: 8px;
-          }
-
-          .input-row {
-            flex-direction: column;
-          }
-
-          .input-row button {
-            width: 100%;
-          }
+        button {
+          padding: 12px 20px;
+          background: #0f0;
+          border: none;
+          cursor: pointer;
         }
       `}</style>
     </div>

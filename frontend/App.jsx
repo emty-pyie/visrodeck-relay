@@ -13,6 +13,7 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
 
+  // Generate / Load Device Key
   useEffect(() => {
     const generateKey = () =>
       Array.from({ length: 16 }, () => Math.floor(Math.random() * 10)).join("");
@@ -27,6 +28,7 @@ export default function App() {
     }
   }, []);
 
+  // Connection Animation
   const runConnectionSequence = async () => {
     if (recipientKey.length !== 16) return;
 
@@ -46,8 +48,10 @@ export default function App() {
     setConnectedKey(recipientKey);
     setIsConnected(true);
     setStatusPhase("READY");
+    setProgress(100);
   };
 
+  // Send Message
   const sendMessage = async () => {
     if (!message.trim()) return;
 
@@ -68,25 +72,46 @@ export default function App() {
         }),
       });
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          text: message,
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-
       setMessage("");
       setProgress(100);
+
       setTimeout(() => {
         setStatusPhase("READY");
-        setProgress(100);
       }, 600);
+
     } catch (err) {
       setStatusPhase("TRANSMISSION FAILED");
     }
   };
+
+  // Fetch Messages from Backend
+  const fetchMessages = async () => {
+    if (!isConnected) return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/messages/${deviceKey}`);
+      const data = await res.json();
+
+      const parsed = data.map((m) => ({
+        id: m.id,
+        text: atob(m.encryptedData),
+        timestamp: m.timestamp,
+      }));
+
+      setMessages(parsed);
+    } catch (err) {
+      console.error("Fetch failed:", err);
+    }
+  };
+
+  // Poll every 3 seconds
+  useEffect(() => {
+    if (!isConnected) return;
+
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 3000);
+    return () => clearInterval(interval);
+  }, [isConnected, deviceKey]);
 
   return (
     <div className="app">
@@ -209,10 +234,6 @@ export default function App() {
           display: flex;
           gap: 20px;
           opacity: 0.7;
-        }
-
-        .peer {
-          opacity: 1;
         }
 
         .status {

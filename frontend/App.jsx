@@ -153,15 +153,40 @@ export default function App() {
     <div className="app">
 
       <header className="topbar">
-        <div className="brand">
-          <Shield size={16} />
-          VISRODECK RELAY
-        </div>
-        <div className="network">
-          STATUS: {backendOnline ? "ONLINE" : "NODES DOWN"} |
-          CONNECTED NODES: {nodeCount}
-        </div>
-      </header>
+  <div className="brand">
+    <Shield size={16} />
+    VISRODECK RELAY
+  </div>
+
+  <div className="network">
+    STATUS: {backendOnline ? "ONLINE" : "NODES DOWN"} |
+    CONNECTED NODES: {nodeCount}
+  </div>
+
+  {isConnected && (
+    <div className="connectionInfo">
+      <div>
+        DEV: <span className="key">{deviceKey}</span>
+      </div>
+      <div>
+        PEER: <span className="key active">{connectedKey}</span>
+      </div>
+      <button
+        className="disconnectBtn"
+        onClick={() => {
+          setIsConnected(false);
+          setConnectedKey("");
+          setMessages([]);
+          setStatus("IDLE");
+          setProgress(0);
+        }}
+      >
+        DISCONNECT
+      </button>
+    </div>
+  )}
+</header>
+
 
       <div className="statusPanel">
         <div className="statusText">{status}</div>

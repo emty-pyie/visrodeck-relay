@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shield, Key, Send, Lock, Unlock, AlertCircle, CheckCircle, XCircle, Globe, FileText, Zap } from 'lucide-react';
+import { Shield, Key, Send, Lock, Unlock, AlertCircle, CheckCircle, Globe, FileText, Zap } from 'lucide-react';
 
-// ✅ API Configuration - Change this to your ngrok or production URL
 const API_URL = 'https://lilian-interindividual-merle.ngrok-free.dev';
 
 export default function App() {
@@ -47,7 +46,6 @@ export default function App() {
     };
   }, []);
 
-  // Connection Animation
   useEffect(() => {
     if (isConnecting && connectionCanvasRef.current) {
       startConnectionAnimation();
@@ -75,7 +73,6 @@ export default function App() {
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
     
-    // Node positions
     const nodes = [
       { x: centerX - 150, y: centerY, label: 'You', color: '#ffffff' },
       { x: centerX + 150, y: centerY, label: 'Recipient', color: '#ffffff' },
@@ -93,9 +90,7 @@ export default function App() {
       animationProgress += 0.01;
       particleProgress += 0.03;
 
-      // Draw connections based on stage
       if (nodeStatus === 'searching') {
-        // Pulsing search waves
         for (let i = 0; i < 3; i++) {
           const radius = (animationProgress * 200 + i * 60) % 200;
           ctx.beginPath();
@@ -107,7 +102,6 @@ export default function App() {
       }
 
       if (nodeStatus === 'handshaking' || nodeStatus === 'encrypting' || nodeStatus === 'connected') {
-        // Draw lines between nodes
         nodes.forEach((node, i) => {
           nodes.forEach((otherNode, j) => {
             if (i < j) {
@@ -123,7 +117,6 @@ export default function App() {
       }
 
       if (nodeStatus === 'handshaking') {
-        // Key exchange particles
         const particle1X = nodes[0].x + (nodes[2].x - nodes[0].x) * (particleProgress % 1);
         const particle1Y = nodes[0].y + (nodes[2].y - nodes[0].y) * (particleProgress % 1);
         
@@ -138,7 +131,6 @@ export default function App() {
       }
 
       if (nodeStatus === 'encrypting') {
-        // Encryption symbols flowing
         for (let i = 0; i < 4; i++) {
           const progress = (particleProgress + i * 0.25) % 1;
           const x = nodes[0].x + (nodes[1].x - nodes[0].x) * progress;
@@ -151,7 +143,6 @@ export default function App() {
       }
 
       if (nodeStatus === 'connected') {
-        // Success glow
         ctx.shadowBlur = 20;
         ctx.shadowColor = '#10b981';
         nodes.forEach(node => {
@@ -164,9 +155,7 @@ export default function App() {
         ctx.shadowBlur = 0;
       }
 
-      // Draw nodes
       nodes.forEach(node => {
-        // Node circle
         ctx.beginPath();
         ctx.arc(node.x, node.y, 20, 0, Math.PI * 2);
         ctx.fillStyle = node.color === '#ffffff' ? '#1f2937' : 'rgba(16, 185, 129, 0.2)';
@@ -175,14 +164,12 @@ export default function App() {
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Node label
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 12px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(node.label, node.x, node.y - 35);
       });
 
-      // Status text
       ctx.fillStyle = '#10b981';
       ctx.font = 'bold 14px monospace';
       ctx.textAlign = 'center';
@@ -202,8 +189,6 @@ export default function App() {
 
   const checkBackendStatus = async () => {
     try {
-      console.log('Checking backend at:', `${API_URL}/api/health`); // Debug log
-      
       const response = await fetch(`${API_URL}/api/health`, {
         method: 'GET',
         headers: { 
@@ -212,22 +197,14 @@ export default function App() {
         },
       });
       
-      console.log('Backend response status:', response.status); // Debug log
-      
       if (response.ok) {
         const data = await response.json();
-        console.log('Backend health check:', data); // Debug log
         setBackendOnline(data.status === 'online');
-        setNodeStatus('online');
       } else {
-        console.error('Backend returned error status:', response.status);
         setBackendOnline(false);
-        setNodeStatus('offline');
       }
     } catch (error) {
-      console.error('Backend health check failed:', error);
       setBackendOnline(false);
-      setNodeStatus('offline');
     }
   };
 
@@ -236,7 +213,7 @@ export default function App() {
       return { valid: false, error: 'Key must be exactly 16 digits' };
     }
     if (key === deviceKey) {
-      return { valid: false, error: "You can't connect to yourself! Enter someone else's key." };
+      return { valid: false, error: "You can't connect to yourself!" };
     }
     return { valid: true, error: '' };
   };
@@ -249,7 +226,7 @@ export default function App() {
       return;
     }
     if (!backendOnline) {
-      setError('Backend server is offline. Please start the backend first.');
+      setError('Backend server is offline.');
       return;
     }
 
@@ -276,8 +253,6 @@ export default function App() {
 
   const sendMessage = async () => {
     if (!message.trim() || !isConnected) return;
-    setNodeStatus('transmitting');
-    const encryptedMsg = btoa(message);
     
     try {
       const response = await fetch(`${API_URL}/api/message`, {
@@ -289,15 +264,10 @@ export default function App() {
         body: JSON.stringify({
           senderKey: deviceKey,
           recipientKey,
-          encryptedData: encryptedMsg,
+          encryptedData: btoa(message),
           timestamp: new Date().toISOString()
         })
       });
-
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Server returned HTML instead of JSON. Backend may have crashed.');
-      }
 
       if (response.ok) {
         setMessages([...messages, {
@@ -307,28 +277,17 @@ export default function App() {
           timestamp: new Date().toISOString()
         }]);
         setMessage('');
-        setNodeStatus('connected');
-      } else {
-        setError('Failed to send message. Please try again.');
       }
     } catch (error) {
-      setError(error.message || 'Failed to send message');
-      setNodeStatus('error');
+      console.error('Send failed:', error);
     }
   };
 
   const fetchMessages = async () => {
     if (!isConnected) return;
     try {
-      const response = await fetch(`${API_URL}/api/messages/${deviceKey}`, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-      });
-      
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) return;
+      const response = await fetch(`${API_URL}/api/messages/${deviceKey}`);
       if (!response.ok) return;
-
       const data = await response.json();
       if (Array.isArray(data)) {
         const decryptedMessages = data.map(msg => ({
@@ -352,230 +311,120 @@ export default function App() {
   }, [isConnected, deviceKey]);
 
   return (
-    <div style={styles.pageContainer}>
-      <header style={styles.header}>
-        <div style={styles.headerContent}>
-          <div style={styles.headerLeft}>
-            <Shield size={32} style={styles.headerIcon} />
+    <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',background:'#000',color:'#fff',fontFamily:'-apple-system,sans-serif'}}>
+      <header style={{background:'#111827',borderBottom:'1px solid #374151',padding:'1rem 0'}}>
+        <div style={{maxWidth:'1200px',margin:'0 auto',padding:'0 1rem',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'1rem'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'1rem'}}>
+            <Shield size={32}/>
             <div>
-              <h1 style={styles.headerTitle}>Visrodeck Relay</h1>
-              <p style={styles.headerSubtitle}>End-to-End Encrypted Messaging</p>
+              <h1 style={{margin:0,fontSize:'1.5rem',fontWeight:700}}>Visrodeck Relay</h1>
+              <p style={{margin:0,fontSize:'0.875rem',color:'#9ca3af'}}>End-to-End Encrypted Messaging</p>
             </div>
           </div>
-          <div style={styles.headerRight}>
-            <div style={styles.statusIndicator}>
-              <div style={{
-                ...styles.statusDot,
-                background: backendOnline ? '#10b981' : '#ef4444',
-              }} />
-              <span style={styles.statusText}>
-                {backendOnline ? 'Server Online' : 'Server Offline'}
-              </span>
-            </div>
+          <div style={{display:'flex',alignItems:'center',gap:'0.5rem',padding:'0.5rem 1rem',background:'rgba(255,255,255,0.05)',borderRadius:'20px',border:'1px solid rgba(255,255,255,0.1)'}}>
+            <div style={{width:'8px',height:'8px',borderRadius:'50%',background:backendOnline?'#10b981':'#ef4444'}}/>
+            <span style={{fontSize:'0.875rem',fontWeight:500}}>{backendOnline?'Server Online':'Server Offline'}</span>
           </div>
         </div>
       </header>
 
-      <main style={styles.main}>
-        <div style={styles.container}>
-          <div style={styles.infoBar}>
-            <div style={styles.infoItem}>
-              <Lock size={16} />
-              <span>AES-256-GCM Encryption</span>
-            </div>
-            <div style={styles.infoItem}>
-              <Shield size={16} />
-              <span>Zero-Knowledge Architecture</span>
-            </div>
-            <div style={styles.infoItem}>
-              <Key size={16} />
-              <span>Anonymous Communication</span>
-            </div>
+      <main style={{flex:1,padding:'2rem 0',background:'#0a0a0a'}}>
+        <div style={{maxWidth:'1200px',margin:'0 auto',padding:'0 1rem'}}>
+          <div style={{display:'flex',gap:'1rem',padding:'1.5rem',background:'#1f2937',border:'1px solid #374151',borderRadius:'8px',marginBottom:'2rem',flexWrap:'wrap'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'0.5rem',fontSize:'0.875rem',color:'#d1d5db'}}><Lock size={16}/><span>AES-256-GCM</span></div>
+            <div style={{display:'flex',alignItems:'center',gap:'0.5rem',fontSize:'0.875rem',color:'#d1d5db'}}><Shield size={16}/><span>Zero-Knowledge</span></div>
+            <div style={{display:'flex',alignItems:'center',gap:'0.5rem',fontSize:'0.875rem',color:'#d1d5db'}}><Key size={16}/><span>Anonymous</span></div>
           </div>
 
-          <div style={styles.deviceKeyCard}>
-            <div style={styles.cardHeader}>
-              <Key size={20} />
-              <h3 style={styles.cardTitle}>Your Device Key</h3>
+          <div style={{background:'#1f2937',border:'1px solid #374151',borderRadius:'8px',padding:'1.5rem',marginBottom:'2rem'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'0.75rem',marginBottom:'1rem'}}>
+              <Key size={20}/>
+              <h3 style={{margin:0,fontSize:'1.125rem',fontWeight:600,color:'#fff'}}>Your Device Key</h3>
             </div>
-            <div style={styles.deviceKeyDisplay}>
-              <code style={styles.deviceKeyCode}>{deviceKey || 'GENERATING...'}</code>
-              <button 
-                style={styles.copyButton}
-                onClick={() => {
-                  navigator.clipboard.writeText(deviceKey);
-                  alert('Device key copied to clipboard!');
-                }}
-              >
-                Copy
-              </button>
+            <div style={{display:'flex',gap:'0.75rem',alignItems:'stretch',marginBottom:'0.75rem',flexWrap:'wrap'}}>
+              <code style={{flex:'1 1 200px',minWidth:0,padding:'1rem',background:'#111827',border:'2px solid #374151',borderRadius:'6px',fontFamily:'monospace',fontSize:'1rem',fontWeight:600,letterSpacing:'0.1em',color:'#fff',wordBreak:'break-all'}}>{deviceKey||'GENERATING...'}</code>
+              <button style={{flex:'0 0 auto',padding:'1rem 1.5rem',background:'#fff',color:'#000',border:'none',borderRadius:'6px',fontWeight:600,cursor:'pointer',whiteSpace:'nowrap'}} onClick={()=>{navigator.clipboard.writeText(deviceKey);alert('Copied!')}}>Copy</button>
             </div>
-            <p style={styles.deviceKeyNote}>
-              Share this key with others to allow them to send you encrypted messages.
-            </p>
+            <p style={{fontSize:'0.875rem',color:'#9ca3af',margin:0}}>Share this key to receive encrypted messages.</p>
           </div>
 
-          {error && (
-            <div style={styles.errorCard}>
-              <AlertCircle size={20} />
-              <span>{error}</span>
-              <button 
-                style={styles.errorClose}
-                onClick={() => setError('')}
-              >
-                ×
-              </button>
-            </div>
-          )}
+          {error&&<div style={{background:'#7f1d1d',border:'1px solid #991b1b',borderRadius:'8px',padding:'1rem',marginBottom:'2rem',display:'flex',alignItems:'center',gap:'0.75rem',color:'#fecaca'}}>
+            <AlertCircle size={20}/><span>{error}</span>
+            <button style={{marginLeft:'auto',background:'none',border:'none',fontSize:'1.5rem',cursor:'pointer',color:'#fecaca',padding:'0 0.5rem'}} onClick={()=>setError('')}>×</button>
+          </div>}
 
           {!isConnected ? (
-            <div style={styles.card}>
-              <div style={styles.cardHeader}>
-                <Unlock size={20} />
-                <h3 style={styles.cardTitle}>Establish Secure Connection</h3>
+            <div style={{background:'#1f2937',border:'1px solid #374151',borderRadius:'8px',padding:'1.5rem'}}>
+              <div style={{display:'flex',alignItems:'center',gap:'0.75rem',marginBottom:'1rem'}}>
+                <Unlock size={20}/>
+                <h3 style={{margin:0,fontSize:'1.125rem',fontWeight:600,color:'#fff'}}>Establish Secure Connection</h3>
               </div>
               
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Recipient's Device Key</label>
-                <input
-                  type="text"
-                  placeholder="Enter 16-digit key"
-                  value={recipientKey}
-                  onChange={(e) => {
-                    setRecipientKey(e.target.value.replace(/\D/g, '').slice(0, 16));
-                    setError('');
-                  }}
-                  maxLength={16}
-                  style={styles.input}
-                />
-                {recipientKey.length > 0 && (
-                  <div style={{
-                    ...styles.helperText,
-                    color: recipientKey.length === 16 ? '#10b981' : '#9ca3af',
-                  }}>
-                    {recipientKey.length === 16 
-                      ? '✓ Valid key format' 
-                      : `${16 - recipientKey.length} more digits needed`}
-                  </div>
-                )}
+              <div style={{marginBottom:'1.5rem'}}>
+                <label style={{display:'block',marginBottom:'0.5rem',fontSize:'0.875rem',fontWeight:600,color:'#d1d5db'}}>Recipient's Device Key</label>
+                <input type="text" placeholder="Enter 16-digit key" value={recipientKey} onChange={(e)=>{setRecipientKey(e.target.value.replace(/\D/g,'').slice(0,16));setError('')}} maxLength={16} style={{width:'100%',padding:'0.75rem',background:'#111827',border:'2px solid #374151',borderRadius:'6px',fontSize:'1rem',fontFamily:'monospace',letterSpacing:'0.1em',outline:'none',color:'#fff'}}/>
+                {recipientKey.length>0&&<div style={{marginTop:'0.5rem',fontSize:'0.875rem',color:recipientKey.length===16?'#10b981':'#9ca3af'}}>{recipientKey.length===16?'✓ Valid key format':`${16-recipientKey.length} more digits needed`}</div>}
               </div>
 
-              {isConnecting && (
-                <div style={styles.connectionProgress}>
-                  {/* Animated Connection Canvas */}
-                  <canvas 
-                    ref={connectionCanvasRef}
-                    style={styles.connectionCanvas}
-                  />
-                  
-                  <div style={styles.progressInfo}>
-                    <div style={styles.progressDetails}>
-                      <Zap size={18} style={styles.zapIcon} />
-                      <span style={styles.progressText}>
-                        {nodeStatus === 'searching' && 'Scanning network nodes...'}
-                        {nodeStatus === 'handshaking' && 'Exchanging cryptographic keys...'}
-                        {nodeStatus === 'encrypting' && 'Deploying AES-256 encryption...'}
-                        {nodeStatus === 'connected' && 'Secure tunnel established!'}
-                      </span>
-                    </div>
-                    <span style={styles.progressPercent}>{encryptionProgress}%</span>
+              {isConnecting&&<div style={{marginBottom:'1.5rem'}}>
+                <canvas ref={connectionCanvasRef} style={{width:'100%',height:'300px',borderRadius:'8px',marginBottom:'1rem',background:'#111827',border:'1px solid #374151'}}/>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.75rem',fontSize:'0.875rem',fontWeight:500,flexWrap:'wrap',gap:'0.5rem'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'0.5rem'}}>
+                    <Zap size={18} style={{color:'#10b981'}}/>
+                    <span style={{color:'#d1d5db'}}>
+                      {nodeStatus==='searching'&&'Scanning network nodes...'}
+                      {nodeStatus==='handshaking'&&'Exchanging keys...'}
+                      {nodeStatus==='encrypting'&&'Deploying encryption...'}
+                      {nodeStatus==='connected'&&'Secure tunnel established!'}
+                    </span>
                   </div>
-                  <div style={styles.progressBar}>
-                    <div style={{
-                      ...styles.progressFill,
-                      width: `${encryptionProgress}%`,
-                    }} />
-                  </div>
+                  <span style={{color:'#10b981',fontWeight:700,fontSize:'1rem'}}>{encryptionProgress}%</span>
                 </div>
-              )}
+                <div style={{width:'100%',height:'8px',background:'#374151',borderRadius:'4px',overflow:'hidden'}}>
+                  <div style={{height:'100%',background:'linear-gradient(90deg,#10b981,#34d399)',transition:'width 0.3s',width:`${encryptionProgress}%`}}/>
+                </div>
+              </div>}
 
-              <button
-                onClick={connectToNode}
-                disabled={isConnecting || recipientKey.length !== 16 || !backendOnline}
-                style={{
-                  ...styles.primaryButton,
-                  opacity: (recipientKey.length === 16 && backendOnline) ? 1 : 0.5,
-                  cursor: (recipientKey.length === 16 && backendOnline) ? 'pointer' : 'not-allowed',
-                }}
-              >
-                {isConnecting ? 'Establishing Connection...' : 'Connect Securely'}
+              <button onClick={connectToNode} disabled={isConnecting||recipientKey.length!==16||!backendOnline} style={{width:'100%',padding:'0.875rem',background:'#fff',color:'#000',border:'none',borderRadius:'6px',fontSize:'1rem',fontWeight:600,opacity:(recipientKey.length===16&&backendOnline)?1:0.5,cursor:(recipientKey.length===16&&backendOnline)?'pointer':'not-allowed'}}>
+                {isConnecting?'Establishing Connection...':'Connect Securely'}
               </button>
             </div>
           ) : (
-            <div style={styles.card}>
-              <div style={styles.cardHeader}>
-                <Lock size={20} />
-                <h3 style={styles.cardTitle}>Encrypted Chat</h3>
-                <button 
-                  style={styles.disconnectBtn}
-                  onClick={() => {
-                    setIsConnected(false);
-                    setRecipientKey('');
-                    setMessages([]);
-                    setEncryptionProgress(0);
-                  }}
-                >
-                  Disconnect
-                </button>
+            <div style={{background:'#1f2937',border:'1px solid #374151',borderRadius:'8px',padding:'1.5rem'}}>
+              <div style={{display:'flex',alignItems:'center',gap:'0.75rem',marginBottom:'1rem',flexWrap:'wrap'}}>
+                <Lock size={20}/>
+                <h3 style={{margin:0,fontSize:'1.125rem',fontWeight:600,flex:1,color:'#fff'}}>Encrypted Chat</h3>
+                <button style={{padding:'0.5rem 1rem',background:'#7f1d1d',color:'#fecaca',border:'1px solid #991b1b',borderRadius:'6px',fontSize:'0.875rem',fontWeight:600,cursor:'pointer'}} onClick={()=>{setIsConnected(false);setRecipientKey('');setMessages([]);setEncryptionProgress(0)}}>Disconnect</button>
               </div>
 
-              <div style={styles.connectionBadge}>
-                <CheckCircle size={16} color="#10b981" />
-                <span>Secure connection established with {recipientKey}</span>
+              <div style={{display:'flex',alignItems:'center',gap:'0.5rem',padding:'0.75rem',background:'#064e3b',border:'1px solid #065f46',borderRadius:'6px',marginBottom:'1rem',fontSize:'0.875rem',color:'#86efac',flexWrap:'wrap'}}>
+                <CheckCircle size={16} color="#10b981"/>
+                <span>Secure connection with {recipientKey}</span>
               </div>
 
-              <div style={styles.messagesContainer}>
-                {messages.length === 0 ? (
-                  <div style={styles.emptyState}>
-                    <Lock size={48} style={{ opacity: 0.3 }} />
+              <div style={{height:'400px',overflowY:'auto',padding:'1rem',background:'#111827',borderRadius:'6px',marginBottom:'1rem',display:'flex',flexDirection:'column',gap:'0.75rem'}}>
+                {messages.length===0 ? (
+                  <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',color:'#6b7280',textAlign:'center'}}>
+                    <Lock size={48} style={{opacity:0.3}}/>
                     <p>No messages yet. Start a secure conversation!</p>
                   </div>
                 ) : (
-                  messages.map(msg => (
-                    <div
-                      key={msg.id}
-                      style={{
-                        ...styles.messageCard,
-                        alignSelf: msg.sender === 'you' ? 'flex-end' : 'flex-start',
-                        background: msg.sender === 'you' ? '#ffffff' : '#1f2937',
-                        color: msg.sender === 'you' ? '#000000' : '#ffffff',
-                        border: msg.sender === 'you' ? '1px solid #e5e7eb' : '1px solid #374151',
-                      }}
-                    >
-                      <div style={styles.messageHeader}>
-                        <span style={{ fontWeight: 600 }}>
-                          {msg.sender === 'you' ? 'You' : 'Recipient'}
-                        </span>
-                        <span style={{ opacity: 0.6 }}>
-                          {new Date(msg.timestamp).toLocaleTimeString()}
-                        </span>
+                  messages.map(msg=>(
+                    <div key={msg.id} style={{maxWidth:'70%',padding:'0.75rem 1rem',borderRadius:'8px',alignSelf:msg.sender==='you'?'flex-end':'flex-start',background:msg.sender==='you'?'#fff':'#1f2937',color:msg.sender==='you'?'#000':'#fff',border:msg.sender==='you'?'1px solid #e5e7eb':'1px solid #374151'}}>
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.75rem',marginBottom:'0.25rem',opacity:0.8}}>
+                        <span style={{fontWeight:600}}>{msg.sender==='you'?'You':'Recipient'}</span>
+                        <span style={{opacity:0.6}}>{new Date(msg.timestamp).toLocaleTimeString()}</span>
                       </div>
-                      <div style={styles.messageText}>{msg.text}</div>
+                      <div style={{fontSize:'0.95rem',lineHeight:1.5,wordBreak:'break-word'}}>{msg.text}</div>
                     </div>
                   ))
                 )}
               </div>
 
-              <div style={styles.messageInputContainer}>
-                <input
-                  type="text"
-                  placeholder="Type your encrypted message..."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                  style={styles.messageInput}
-                />
-                <button
-                  onClick={sendMessage}
-                  disabled={!message.trim()}
-                  style={{
-                    ...styles.sendButton,
-                    opacity: message.trim() ? 1 : 0.5,
-                    cursor: message.trim() ? 'pointer' : 'not-allowed',
-                  }}
-                >
-                  <Send size={18} />
-                  Send
+              <div style={{display:'flex',gap:'0.75rem',flexWrap:'wrap'}}>
+                <input type="text" placeholder="Type your encrypted message..." value={message} onChange={(e)=>setMessage(e.target.value)} onKeyPress={(e)=>e.key==='Enter'&&sendMessage()} style={{flex:'1 1 200px',minWidth:0,padding:'0.75rem',background:'#111827',border:'2px solid #374151',borderRadius:'6px',fontSize:'1rem',outline:'none',color:'#fff'}}/>
+                <button onClick={sendMessage} disabled={!message.trim()} style={{flex:'0 0 auto',padding:'0.75rem 1.5rem',background:'#fff',color:'#000',border:'none',borderRadius:'6px',fontWeight:600,display:'flex',alignItems:'center',gap:'0.5rem',whiteSpace:'nowrap',opacity:message.trim()?1:0.5,cursor:message.trim()?'pointer':'not-allowed'}}>
+                  <Send size={18}/>Send
                 </button>
               </div>
             </div>
@@ -583,23 +432,21 @@ export default function App() {
         </div>
       </main>
 
-      <footer style={styles.footer}>
-        <div style={styles.footerContent}>
-          <div style={styles.footerLeft}>
-            <h4 style={styles.footerTitle}>Visrodeck Relay</h4>
-            <p style={styles.footerText}>POWERED BY VISRODECK TECHNOLOGY</p>
+      <footer style={{background:'#111827',borderTop:'1px solid #374151',padding:'2rem 0',marginTop:'auto'}}>
+        <div style={{maxWidth:'1200px',margin:'0 auto',padding:'0 1rem',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'2rem'}}>
+          <div>
+            <h4 style={{margin:'0 0 0.25rem 0',fontSize:'1.125rem',fontWeight:700}}>Visrodeck Relay</h4>
+            <p style={{margin:0,fontSize:'0.75rem',color:'#9ca3af',textTransform:'uppercase',letterSpacing:'0.05em'}}>POWERED BY VISRODECK TECHNOLOGY</p>
           </div>
-          <div style={styles.footerCenter}>
-            <a href="#" style={styles.footerLink}>
-              <FileText size={14} />
-              Privacy Policy
+          <div>
+            <a href="#" style={{display:'inline-flex',alignItems:'center',gap:'0.5rem',color:'#fff',textDecoration:'none',fontSize:'0.875rem'}}>
+              <FileText size={14}/>Privacy Policy
             </a>
           </div>
-          <div style={styles.footerRight}>
-            <p style={styles.footerText}>All rights reserved</p>
-            <a href="https://visrodeck.com" style={styles.footerLink} target="_blank" rel="noopener noreferrer">
-              <Globe size={14} />
-              visrodeck.com
+          <div style={{textAlign:'right'}}>
+            <p style={{margin:0,fontSize:'0.75rem',color:'#9ca3af',textTransform:'uppercase',letterSpacing:'0.05em'}}>All rights reserved</p>
+            <a href="https://visrodeck.com" style={{display:'inline-flex',alignItems:'center',gap:'0.5rem',color:'#fff',textDecoration:'none',fontSize:'0.875rem',marginTop:'0.5rem'}} target="_blank" rel="noopener noreferrer">
+              <Globe size={14}/>visrodeck.com
             </a>
           </div>
         </div>
@@ -607,391 +454,3 @@ export default function App() {
     </div>
   );
 }
-
-const styles = {
-  pageContainer: {
-    minHeight: '100vh',
-    display: 'flex',
-    flexDirection: 'column',
-    background: '#000000',
-    color: '#ffffff',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  },
-  header: {
-    background: '#111827',
-    color: '#ffffff',
-    borderBottom: '1px solid #374151',
-    padding: '1rem 0',
-  },
-  headerContent: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    padding: '0 2rem',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerLeft: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '1rem',
-  },
-  headerIcon: {
-    color: '#ffffff',
-  },
-  headerTitle: {
-    margin: 0,
-    fontSize: '1.5rem',
-    fontWeight: 700,
-    letterSpacing: '-0.025em',
-  },
-  headerSubtitle: {
-    margin: 0,
-    fontSize: '0.875rem',
-    color: '#9ca3af',
-    fontWeight: 400,
-  },
-  headerRight: {
-    display: 'flex',
-    alignItems: 'center',
-  },
-  statusIndicator: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    padding: '0.5rem 1rem',
-    background: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: '20px',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-  },
-  statusDot: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-  },
-  statusText: {
-    fontSize: '0.875rem',
-    fontWeight: 500,
-  },
-  main: {
-    flex: 1,
-    padding: '2rem 0',
-    background: '#0a0a0a',
-  },
-  container: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    padding: '0 2rem',
-  },
-  infoBar: {
-    display: 'flex',
-    gap: '2rem',
-    padding: '1.5rem',
-    background: '#1f2937',
-    border: '1px solid #374151',
-    borderRadius: '8px',
-    marginBottom: '2rem',
-    flexWrap: 'wrap',
-  },
-  infoItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    fontSize: '0.875rem',
-    color: '#d1d5db',
-  },
-  deviceKeyCard: {
-    background: '#1f2937',
-    border: '1px solid #374151',
-    borderRadius: '8px',
-    padding: '1.5rem',
-    marginBottom: '2rem',
-  },
-  cardHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-    marginBottom: '1rem',
-  },
-  cardTitle: {
-    margin: 0,
-    fontSize: '1.125rem',
-    fontWeight: 600,
-    flex: 1,
-    color: '#ffffff',
-  },
-  deviceKeyDisplay: {
-    display: 'flex',
-    gap: '1rem',
-    alignItems: 'center',
-    marginBottom: '0.75rem',
-  },
-  deviceKeyCode: {
-    flex: 1,
-    padding: '1rem',
-    background: '#111827',
-    border: '2px solid #374151',
-    borderRadius: '6px',
-    fontFamily: '"Courier New", monospace',
-    fontSize: '1.25rem',
-    fontWeight: 600,
-    letterSpacing: '0.1em',
-    color: '#ffffff',
-  },
-  copyButton: {
-    padding: '1rem 1.5rem',
-    background: '#ffffff',
-    color: '#000000',
-    border: 'none',
-    borderRadius: '6px',
-    fontWeight: 600,
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-  },
-  deviceKeyNote: {
-    fontSize: '0.875rem',
-    color: '#9ca3af',
-    margin: 0,
-  },
-  errorCard: {
-    background: '#7f1d1d',
-    border: '1px solid #991b1b',
-    borderRadius: '8px',
-    padding: '1rem',
-    marginBottom: '2rem',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-    color: '#fecaca',
-  },
-  errorClose: {
-    marginLeft: 'auto',
-    background: 'none',
-    border: 'none',
-    fontSize: '1.5rem',
-    cursor: 'pointer',
-    color: '#fecaca',
-    padding: '0 0.5rem',
-  },
-  card: {
-    background: '#1f2937',
-    border: '1px solid #374151',
-    borderRadius: '8px',
-    padding: '1.5rem',
-  },
-  formGroup: {
-    marginBottom: '1.5rem',
-  },
-  label: {
-    display: 'block',
-    marginBottom: '0.5rem',
-    fontSize: '0.875rem',
-    fontWeight: 600,
-    color: '#d1d5db',
-  },
-  input: {
-    width: '100%',
-    padding: '0.75rem',
-    background: '#111827',
-    border: '2px solid #374151',
-    borderRadius: '6px',
-    fontSize: '1rem',
-    fontFamily: '"Courier New", monospace',
-    letterSpacing: '0.1em',
-    outline: 'none',
-    transition: 'border-color 0.2s',
-    color: '#ffffff',
-  },
-  helperText: {
-    marginTop: '0.5rem',
-    fontSize: '0.875rem',
-  },
-  connectionProgress: {
-    marginBottom: '1.5rem',
-  },
-  connectionCanvas: {
-    width: '100%',
-    height: '300px',
-    borderRadius: '8px',
-    marginBottom: '1rem',
-    background: '#111827',
-    border: '1px solid #374151',
-  },
-  progressInfo: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '0.75rem',
-    fontSize: '0.875rem',
-    fontWeight: 500,
-  },
-  progressDetails: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-  },
-  zapIcon: {
-    color: '#10b981',
-  },
-  progressText: {
-    color: '#d1d5db',
-  },
-  progressPercent: {
-    color: '#10b981',
-    fontWeight: 700,
-    fontSize: '1rem',
-  },
-  progressBar: {
-    width: '100%',
-    height: '8px',
-    background: '#374151',
-    borderRadius: '4px',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    background: 'linear-gradient(90deg, #10b981, #34d399)',
-    transition: 'width 0.3s ease',
-    boxShadow: '0 0 10px rgba(16, 185, 129, 0.5)',
-  },
-  primaryButton: {
-    width: '100%',
-    padding: '0.875rem',
-    background: '#ffffff',
-    color: '#000000',
-    border: 'none',
-    borderRadius: '6px',
-    fontSize: '1rem',
-    fontWeight: 600,
-    transition: 'all 0.2s',
-  },
-  disconnectBtn: {
-    marginLeft: 'auto',
-    padding: '0.5rem 1rem',
-    background: '#7f1d1d',
-    color: '#fecaca',
-    border: '1px solid #991b1b',
-    borderRadius: '6px',
-    fontSize: '0.875rem',
-    fontWeight: 600,
-    cursor: 'pointer',
-  },
-  connectionBadge: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    padding: '0.75rem',
-    background: '#064e3b',
-    border: '1px solid #065f46',
-    borderRadius: '6px',
-    marginBottom: '1rem',
-    fontSize: '0.875rem',
-    color: '#86efac',
-  },
-  messagesContainer: {
-    height: '400px',
-    overflowY: 'auto',
-    padding: '1rem',
-    background: '#111827',
-    borderRadius: '6px',
-    marginBottom: '1rem',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem',
-  },
-  emptyState: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    color: '#6b7280',
-    textAlign: 'center',
-  },
-  messageCard: {
-    maxWidth: '70%',
-    padding: '0.75rem 1rem',
-    borderRadius: '8px',
-  },
-  messageHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '0.75rem',
-    marginBottom: '0.25rem',
-    opacity: 0.8,
-  },
-  messageText: {
-    fontSize: '0.95rem',
-    lineHeight: 1.5,
-  },
-  messageInputContainer: {
-    display: 'flex',
-    gap: '0.75rem',
-  },
-  messageInput: {
-    flex: 1,
-    padding: '0.75rem',
-    background: '#111827',
-    border: '2px solid #374151',
-    borderRadius: '6px',
-    fontSize: '1rem',
-    outline: 'none',
-    color: '#ffffff',
-  },
-  sendButton: {
-    padding: '0.75rem 1.5rem',
-    background: '#ffffff',
-    color: '#000000',
-    border: 'none',
-    borderRadius: '6px',
-    fontWeight: 600,
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    transition: 'all 0.2s',
-  },
-  footer: {
-    background: '#111827',
-    color: '#ffffff',
-    borderTop: '1px solid #374151',
-    padding: '2rem 0',
-    marginTop: 'auto',
-  },
-  footerContent: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    padding: '0 2rem',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: '2rem',
-  },
-  footerLeft: {},
-  footerTitle: {
-    margin: '0 0 0.25rem 0',
-    fontSize: '1.125rem',
-    fontWeight: 700,
-  },
-  footerText: {
-    margin: 0,
-    fontSize: '0.75rem',
-    color: '#9ca3af',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-  },
-  footerCenter: {},
-  footerRight: {
-    textAlign: 'right',
-  },
-  footerLink: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    color: '#ffffff',
-    textDecoration: 'none',
-    fontSize: '0.875rem',
-    marginTop: '0.5rem',
-    transition: 'color 0.2s',
-  },
-};

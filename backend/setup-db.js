@@ -6,7 +6,6 @@ const path = require('path');
 async function setupDatabase() {
   console.log('🔧 Setting up Visrodeck Relay Database...\n');
   
-  // Use password from environment variable or prompt
   const PASSWORD = process.env.DB_PASSWORD || '';
   
   try {
@@ -31,17 +30,17 @@ async function setupDatabase() {
     console.log('✓ Imported schema successfully');
 
     const [tables] = await connection.query('SHOW TABLES');
-    console.log('\n✅ Database setup complete!');
+    console.log('Database setup complete!');
     console.log('Tables:', tables.map(t => Object.values(t)[0]).join(', '));
 
     await connection.end();
-    console.log('\n🚀 Ready to start the server!');
+    console.log('Ready to start the server!');
     console.log('Run: npm start');
     
   } catch (err) {
-    console.error('❌ Error:', err.message);
+    console.error(' Error:', err.message);
     if (err.code === 'ER_ACCESS_DENIED_ERROR') {
-      console.error('\n⚠️  Check your MySQL password on line 9 of this file!');
+      console.error('  Check your MySQL password on line 9 of this file!');
     }
     process.exit(1);
   }

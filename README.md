@@ -5,21 +5,7 @@ End-to-End Encrypted Anonymous Messaging System
 Visrodeck Relay is a privacy-focused encrypted messaging platform built with React, Express, and mySQL.
 It enables secure, anonymous communication without user accounts or personal data storage.
 
-🚀 Features
 
-🔒 Client-Side End-to-End Encryption (AES-256-GCM)
-
-👤 No Accounts Required
-
-🔑 Device-Generated Identity Keys
-
-📦 Encrypted Message Storage
-
-⏳ Message Expiration (Auto Cleanup)
-
-🌑 Modern Dark UI
-
-⚡ Real-Time Retrieval via API
 
 🏗 Architecture
 ┌─────────────────┐         ┌──────────────────┐         ┌────────────────────┐

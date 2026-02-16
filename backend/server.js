@@ -4,6 +4,11 @@ const cors = require('cors');
 const mysql = require('mysql2/promise');
 const crypto = require('crypto');
 
+// Dear future devloper,
+// We both know this code sucks!
+// well then as a warning mention how many hours you wasted in this
+// total Hour Wasted: 11hr
+
 const app = express();
 const PORT = 3001;
 

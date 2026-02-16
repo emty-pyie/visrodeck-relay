@@ -31,11 +31,11 @@ async function setupDatabase() {
     console.log('✓ Imported schema successfully');
 
     const [tables] = await connection.query('SHOW TABLES');
-    console.log('\n Database setup complete!');
+    console.log('\n✅ Database setup complete!');
     console.log('Tables:', tables.map(t => Object.values(t)[0]).join(', '));
 
     await connection.end();
-    console.log('\n Ready to start the server!');
+    console.log('\n🚀 Ready to start the server!');
     console.log('Run: npm start');
     
   } catch (err) {

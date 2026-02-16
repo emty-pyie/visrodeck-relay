@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Shield, Key, Send, Lock, Unlock, AlertCircle, CheckCircle, Globe, FileText, Zap } from 'lucide-react';
 
-const API_URL = 'https://473b4d781305a4.lhr.life';
+const API_URL = 'https://visrodeck-relay.onrender.com/api/health';
 
 export default function App() {
   const [deviceKey, setDeviceKey] = useState('');

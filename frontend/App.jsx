@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Shield, Key, Send, Lock, Unlock, AlertCircle, CheckCircle, Globe, FileText, Zap } from 'lucide-react';
 
-const API_URL = 'http://localhost:3001';
+const API_URL = 'https://43f1daf7baf9a3.lhr.life';
 
 export default function App() {
   const [deviceKey, setDeviceKey] = useState('');

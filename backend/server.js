@@ -160,13 +160,13 @@ function decryptMessage(encryptedData, senderKey, recipientKey) {
     return null;
   }
 }
+//-------------------------------------------------------------------------------------------------------------------------------
+// Dear Managing Devloper, We both know that this code sucks but we gotta deal with this so as a warning to other devlopers 
+// please write the number of Hours wasted on this
+// Current Hour Wasted : 6
+//-------------------------------------------------------------------------------------------------------------------------------
 
-/**
- * Generate random garbage noise to obfuscate traffic patterns
- * Makes it harder for attackers to analyze message sizes and timing
- * 
- * @returns {string} - Base64 encoded random data
- */
+
 function addGarbageNoise() {
   // Random size between 100-600 bytes
   const noiseSize = Math.floor(Math.random() * 500) + 100;
@@ -325,13 +325,11 @@ app.post('/api/message', async (req, res) => {
     // Generate random garbage noise to make traffic analysis harder
     const garbageNoise = addGarbageNoise();
 
-    // ✅ FIX: Convert ISO 8601 timestamp to MySQL DATETIME format
-    // MySQL expects: "2024-02-15 09:02:46"
-    // JavaScript sends: "2024-02-15T09:02:46.206Z"
+    
     const mysqlTimestamp = new Date(timestamp)
-      .toISOString()           // "2024-02-15T09:02:46.206Z"
-      .slice(0, 19)            // "2024-02-15T09:02:46"
-      .replace('T', ' ');      // "2024-02-15 09:02:46"
+      .toISOString()           
+      .slice(0, 19)            
+      .replace('T', ' ');      
 
     // Store encrypted message in database
     const [result] = await pool.query(

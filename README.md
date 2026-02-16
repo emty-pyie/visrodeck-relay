@@ -19,6 +19,9 @@ It enables secure, anonymous communication without user accounts or personal dat
   Decryption
 
 
+
+
+
   🔐 Security Model
 Encryption
 

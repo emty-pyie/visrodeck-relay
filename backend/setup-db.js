@@ -7,22 +7,58 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
 
-// Create MySQL Pool (Production Ready)
+/* ✅ AIVEN DIRECT CONFIG */
 const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT,
+  host: 'mysql-raja-rajayadav-mysql.aivencloud.com',
+  port: 26398,
+  user: 'avnadmin',
+  password: 'AVNS_Gj5limQW85MHLlQSG25',
+  database: 'defaultdb',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
   ssl: {
-    rejectUnauthorized: true
+    rejectUnauthorized: false
   }
 });
 
-// Health Check
+/* 🔥 DATABASE SETUP ROUTE */
+app.get('/setup', async (req, res) => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        sender_key VARCHAR(16) NOT NULL,
+        recipient_key VARCHAR(16) NOT NULL,
+        encrypted_data TEXT NOT NULL,
+        garbage_noise TEXT,
+        timestamp DATETIME NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS device_keys (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        device_key VARCHAR(16) UNIQUE NOT NULL,
+        last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    res.json({
+      status: "success",
+      message: "Database tables created successfully"
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      status: "error",
+      message: err.message
+    });
+  }
+});
+
+/* HEALTH CHECK */
 app.get('/api/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
@@ -40,5 +76,5 @@ app.get('/api/health', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Setup Server running on port ${PORT}`);
 });

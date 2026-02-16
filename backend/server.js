@@ -4,21 +4,13 @@ const cors = require('cors');
 const mysql = require('mysql2/promise');
 const crypto = require('crypto');
 
-// Dear future devloper,
-// We both know this code sucks!
-// well then as a warning mention how many hours you wasted in this
-// total Hour Wasted: 11hr
-
 const app = express();
-const PORT = 3001;
+
+/* ✅ IMPORTANT CHANGE 1 — Render Port */
+const PORT = process.env.PORT || 3001;
 
 app.use(cors({
-  origin: [
-    "https://relay.visrodeck.com",
-    "http://localhost:3000",
-    "https://lilian-interindividual-merle.ngrok-free.dev",
-    "https://visrodeck-relay-5azs.vercel.app"
-  ],
+  origin: "*",
   methods: ["GET", "POST", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Accept"],
   credentials: true
@@ -31,14 +23,19 @@ app.use((req, res, next) => {
   next();
 });
 
+/* ✅ IMPORTANT CHANGE 2 — AIVEN DIRECT CONFIG */
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'visrodeck_relay',
+  host: 'mysql-raja-rajayadav-mysql.aivencloud.com',
+  port: 26398,
+  user: 'avnadmin',
+  password: 'AVNS_Gj5limQW85MHLlQSG25',
+  database: 'defaultdb',
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
 
 const ALGORITHM = 'aes-256-gcm';
@@ -96,20 +93,16 @@ async function initializeDatabase() {
         encrypted_data TEXT NOT NULL,
         garbage_noise TEXT,
         timestamp DATETIME NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_recipient (recipient_key),
-        INDEX idx_sender (sender_key),
-        INDEX idx_timestamp (timestamp)
-      ) ENGINE=InnoDB
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS device_keys (
         id INT AUTO_INCREMENT PRIMARY KEY,
         device_key VARCHAR(16) UNIQUE NOT NULL,
-        last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_device_key (device_key)
-      ) ENGINE=InnoDB
+        last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
     `);
 
     console.log('✓ Database tables initialized');
@@ -119,161 +112,13 @@ async function initializeDatabase() {
   }
 }
 
-async function registerDeviceKey(deviceKey) {
+app.get('/api/health', async (req, res) => {
   try {
-    await pool.query(
-      `INSERT INTO device_keys (device_key) VALUES (?)
-       ON DUPLICATE KEY UPDATE last_seen = CURRENT_TIMESTAMP`,
-      [deviceKey]
-    );
-  } catch (error) {
-    console.error('Device key registration failed:', error);
+    await pool.query('SELECT 1');
+    res.json({ status: 'online', timestamp: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
   }
-}
-
-async function cleanOldMessages() {
-  try {
-    await pool.query(`
-      DELETE FROM messages 
-      WHERE id NOT IN (
-        SELECT id FROM (
-          SELECT id FROM messages 
-          ORDER BY timestamp DESC 
-          LIMIT 1000
-        ) as temp
-      )
-    `);
-  } catch (error) {
-    console.error('Message cleanup failed:', error);
-  }
-}
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'online', timestamp: new Date().toISOString() });
-});
-
-app.post('/api/message', async (req, res) => {
-  try {
-    const { senderKey, recipientKey, encryptedData, timestamp } = req.body;
-
-    if (!senderKey || !recipientKey || !encryptedData) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
-
-    if (senderKey.length !== 16 || recipientKey.length !== 16) {
-      return res.status(400).json({ error: 'Invalid key format' });
-    }
-
-    await registerDeviceKey(senderKey);
-    await registerDeviceKey(recipientKey);
-
-    const reEncrypted = encryptMessage(encryptedData, senderKey, recipientKey);
-    const garbageNoise = addGarbageNoise();
-    const mysqlTimestamp = new Date(timestamp).toISOString().slice(0, 19).replace('T', ' ');
-
-    const [result] = await pool.query(
-      `INSERT INTO messages (sender_key, recipient_key, encrypted_data, garbage_noise, timestamp)
-       VALUES (?, ?, ?, ?, ?)`,
-      [senderKey, recipientKey, reEncrypted, garbageNoise, mysqlTimestamp]
-    );
-
-    if (Math.random() < 0.1) {
-      cleanOldMessages();
-    }
-
-    res.json({ 
-      success: true, 
-      messageId: result.insertId,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Message send failed:', error);
-    res.status(500).json({ error: 'Failed to send message', message: error.message });
-  }
-});
-
-app.get('/api/messages/:deviceKey', async (req, res) => {
-  try {
-    const { deviceKey } = req.params;
-
-    if (!deviceKey || deviceKey.length !== 16) {
-      return res.status(400).json({ error: 'Invalid device key' });
-    }
-
-    const [rows] = await pool.query(
-      `SELECT id, sender_key, recipient_key, encrypted_data, timestamp
-       FROM messages 
-       WHERE sender_key = ? OR recipient_key = ?
-       ORDER BY timestamp DESC
-       LIMIT 100`,
-      [deviceKey, deviceKey]
-    );
-
-    const messages = rows.map(row => {
-      const decrypted = decryptMessage(row.encrypted_data, row.sender_key, row.recipient_key);
-      return {
-        id: row.id,
-        senderKey: row.sender_key,
-        recipientKey: row.recipient_key,
-        encryptedData: decrypted || '[Decryption failed]',
-        timestamp: row.timestamp
-      };
-    });
-
-    res.json(messages);
-  } catch (error) {
-    console.error('Message retrieval failed:', error);
-    res.status(500).json({ error: 'Failed to retrieve messages', message: error.message });
-  }
-});
-
-app.delete('/api/messages/:deviceKey', async (req, res) => {
-  try {
-    const { deviceKey } = req.params;
-
-    if (!deviceKey || deviceKey.length !== 16) {
-      return res.status(400).json({ error: 'Invalid device key' });
-    }
-
-    await pool.query(
-      `DELETE FROM messages WHERE sender_key = ? OR recipient_key = ?`,
-      [deviceKey, deviceKey]
-    );
-
-    res.json({ success: true, message: 'Messages deleted' });
-  } catch (error) {
-    console.error('Message deletion failed:', error);
-    res.status(500).json({ error: 'Failed to delete messages', message: error.message });
-  }
-});
-
-app.get('/api/nodes/count', async (req, res) => {
-  try {
-    const [rows] = await pool.query(
-      `SELECT COUNT(DISTINCT device_key) as count 
-       FROM device_keys 
-       WHERE last_seen > DATE_SUB(NOW(), INTERVAL 5 MINUTE)`
-    );
-    res.json({ activeNodes: rows[0].count });
-  } catch (error) {
-    console.error('Node count failed:', error);
-    res.status(500).json({ error: 'Failed to get node count', message: error.message });
-  }
-});
-
-app.use((req, res) => {
-  res.status(404).json({ 
-    error: 'Not Found',
-    message: `Route ${req.method} ${req.path} does not exist`
-  });
-});
-
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(err.status || 500).json({
-    error: 'Internal Server Error',
-    message: err.message
-  });
 });
 
 async function startServer() {
@@ -285,9 +130,6 @@ async function startServer() {
       console.log('╚══════════════════════════════════════════╝');
       console.log(`✓ Server running on port ${PORT}`);
       console.log(`✓ Database connected`);
-      console.log(`✓ Encryption enabled (AES-256-GCM)`);
-      console.log(`✓ FIFO cleanup active`);
-      console.log('');
       console.log('Ready to relay encrypted messages...');
     });
   } catch (error) {
@@ -297,7 +139,6 @@ async function startServer() {
 }
 
 process.on('SIGTERM', async () => {
-  console.log('Shutting down gracefully...');
   await pool.end();
   process.exit(0);
 });

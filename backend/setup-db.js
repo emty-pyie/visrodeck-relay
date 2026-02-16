@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3001;
 
 /* ✅ AIVEN DIRECT CONFIG */
 const pool = mysql.createPool({
-  host: 'mysql-raja-rajayadav-mysql.aivencloud.com',
+  host: 'mysql-raja-rajayadav-mysql.a.aivencloud.com',
   port: 26398,
   user: 'avnadmin',
   password: 'AVNS_Gj5limQW85MHLlQSG25',

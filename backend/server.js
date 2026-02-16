@@ -11,7 +11,8 @@ app.use(cors({
   origin: [
     "https://relay.visrodeck.com",
     "http://localhost:3000",
-    "https://lilian-interindividual-merle.ngrok-free.dev"
+    "https://lilian-interindividual-merle.ngrok-free.dev",
+    "https://visrodeck-relay-5azs.vercel.app"
   ],
   methods: ["GET", "POST", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Accept"],
